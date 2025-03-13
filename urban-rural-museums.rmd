@@ -1,0 +1,880 @@
+---
+title: "Urban and Rural Museums"
+author: "George Alexander Wright"
+date: "2025-03-12"
+output: html_document
+---
+
+<details><summary>Setup Information</summary>
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(ggplot2)
+library(DT)
+library(janitor)
+library(sf)
+library(tidyverse)
+
+source("load_data.R")
+
+WGS_84_CRS <- 4326
+BRITISH_NATIONAL_GRID_CRS <- 27700
+IRISH_GRID_CRS <- 29902
+
+MAPPING_MUSEUMS_CSV <- "data/museums-2025-01-07.csv"
+
+POPULATION_ENGLAND_WALES_CSV <- "data/population-england-wales-lsoas-2022.csv"
+POPULATION_NORTHERN_IRELAND_CSV <- "data/population-northern-ireland-datazones-2021-2022.csv"
+
+RUC_ENGLAND_WALES_CSV <- "data/ruc-england-wales-2021.csv"
+RUC_SCOTLAND_CSV <- "data/ruc-scotland-2022.csv"
+RUC_NORTHERN_IRELAND_CSV <- "data/ruc-northern-ireland-2015.csv"
+ALLOCATIONS_NORTHERN_IRELAND_CSV <- "data/allocations-northern-ireland-2015.csv"
+
+SHAPES_ENGLAND_WALES_LSOAS <- "data/shapes-england-wales-lsoas-2021/LSOA_2021_EW_BSC_V4.shp"
+SHAPES_SCOTLAND_DATAZONES <- "data/shapes-scotland-datazones-2022/SG_DataZoneBdry_2022_MHW.shp"
+SHAPES_NORTHERN_IRELAND_SOAS <- "data/shapes-northern-ireland-soas-2011/SOA2011.shp"
+SHAPES_SPATIAL_SIGNATURES <- "data/spatial-signatures-gb/spatial_signatures_GB_clean.shp"
+
+CENTROIDS_ENGLAND_WALES_LSOAS <- "data/centroids-england-wales-lsoas-2021/LSOA_PopCentroids_EW_2021_V3.shp"
+CENTROIDS_SCOTLAND_DATAZONES <- "data/centroids-scotland-datazones-2022/SG_DataZoneCent_2022.shp"
+CENTROIDS_NORTHERN_IRELAND_DATAZONES <- "data/centroids-northern-ireland-datazones-2021.csv"
+```
+</details>
+
+# Contents
+* [Urban-Rural Classifications](#urban-rural-classifications)
+    * [English and Welsh Classifications](#english-and-welsh-classifications)
+    * [Scottish Classifications](#scottish-classifications)
+    * [Northern Irish Classification](#northern-irish-classifications)
+    * [Composite UK-Wide Classifications](#composite-uk-wide-classifications)
+    * [Spatial Signatures](#spatial-signatures)
+* [Museums in Urban and Rural Areas](#museums-in-urban-and-rural-areas)
+    * [Comparion by country and region](#comparison-by-country-and-region)
+    * [Comparison by age, size, governance, and subject matter](#comparison-by-age-size-governance-and-subject-matter)
+
+## Urban-Rural Classifications
+
+There are several urban/rural classification schemes for different parts of the UK. Official classifications exist for England and Wales, Scotland, and Northern Ireland. These classify areas based on the population of settlement they are part of and the distance in driving time to the nearest major settlement.
+
+MySociety has produced a single UK-wide set of classifications that incorporates these. It classifies areas as either urban, rural, or more rural.
+
+Spatial Signatures classify different levels of urbanity across Great Britain, showing the differences within urban areas.
+
+### English and Welsh Classifications
+
+These classifications describe areas according to data from 2021
+
+```{r urban-rural-england-wales, include=FALSE}
+ruc_ordering_england_wales <- c(
+  "Urban: Nearer to a major town or city",
+  "Urban: Further from a major town or city",
+  "Larger rural: Nearer to a major town or city",
+  "Larger rural: Further from a major town or city",
+  "Smaller rural: Nearer to a major town or city",
+  "Smaller rural: Further from a major town or city"
+)
+ruc_3_fold_ordering_england_wales <- c(
+  "Urban",
+  "Larger rural",
+  "Smaller rural"
+)
+lsoa_populations_england_and_wales <- read_csv(POPULATION_ENGLAND_WALES_CSV) |>
+  clean_names() |>
+  select(
+    area_code=lsoa_2021_code,
+    area_name=lsoa_2021_name,
+    population=total
+  )
+lsoa_ruc_england_wales <- read_csv(RUC_ENGLAND_WALES_CSV) |>
+  clean_names() |>
+  mutate(
+    ruc21nm=factor(ruc21nm, levels=ruc_ordering_england_wales),
+    rural_urban_class_england_wales_3_fold=case_when(
+      ruc21nm == "Urban: Nearer to a major town or city" ~ "Urban",
+      ruc21nm == "Urban: Further from a major town or city" ~ "Urban",
+      ruc21nm == "Larger rural: Nearer to a major town or city" ~ "Larger Rural",
+      ruc21nm == "Larger rural: Further from a major town or city" ~ "Larger Rural",
+      ruc21nm == "Smaller rural: Nearer to a major town or city" ~ "Smaller Rural",
+      ruc21nm == "Smaller rural: Further from a major town or city" ~ "Smaller Rural"
+    ),
+    ruc_composite_6_fold=case_when(
+     ruc21nm == "Urban: Nearer to a major town or city" ~ "Urban, Accessible",
+     ruc21nm == "Urban: Further from a major town or city" ~ "Urban, Remote",
+     ruc21nm == "Larger rural: Nearer to a major town or city" ~ "Quite Rural, Accessible",
+     ruc21nm == "Larger rural: Further from a major town or city" ~ "Quite Rural, Remote",
+     ruc21nm == "Smaller rural: Nearer to a major town or city" ~ "Very Rural, Accessible",
+     ruc21nm == "Smaller rural: Further from a major town or city" ~ "Very Rural, Remote"
+    ),
+    ruc_composite_3_fold=case_when(
+     ruc21nm == "Urban: Nearer to a major town or city" ~ "Urban",
+     ruc21nm == "Urban: Further from a major town or city" ~ "Urban",
+     ruc21nm == "Larger rural: Nearer to a major town or city" ~ "Quite Rural",
+     ruc21nm == "Larger rural: Further from a major town or city" ~ "Quite Rural",
+     ruc21nm == "Smaller rural: Nearer to a major town or city" ~ "Very Rural",
+     ruc21nm == "Smaller rural: Further from a major town or city" ~ "Very Rural"
+    ),
+    ruc_composite_2_fold=case_when(
+      ruc_composite_3_fold == "Urban" ~ "Urban",
+      ruc_composite_3_fold == "Quite Rural" ~ "Rural",
+      ruc_composite_3_fold == "Very Rural" ~ "Rural"
+    )
+  ) |>
+  select(
+    area_code=lsoa21cd,
+    rural_urban_class_england_wales=ruc21nm,
+    rural_urban_class_england_wales_3_fold,
+    ruc_composite_6_fold,
+    ruc_composite_3_fold,
+    ruc_composite_2_fold
+  )
+lsoas_2021_sf <- read_sf(SHAPES_ENGLAND_WALES_LSOAS) |>
+  clean_names() |>
+  st_transform(BRITISH_NATIONAL_GRID_CRS) |>
+  mutate(area_sqkm=st_area(geometry) / 1e6) |>
+  select(area_code=lsoa21cd, area_sqkm)
+small_areas_england_wales <- lsoa_populations_england_and_wales |>
+  left_join(lsoa_ruc_england_wales, by="area_code") |>
+  left_join(lsoas_2021_sf, by="area_code") |>
+  select(-geometry)
+small_areas_england_wales_centroids <- read_sf(CENTROIDS_ENGLAND_WALES_LSOAS) |>
+  clean_names() |>
+  select(area_code=lsoa21cd) |>
+  left_join(small_areas_england_wales, by="area_code")
+small_areas_england_wales_shapes <- lsoas_2021_sf |>
+  select(area_code) |>
+  left_join(small_areas_england_wales, by="area_code")
+
+rural_urban_summary_england_wales <- small_areas_england_wales |>
+  group_by(rural_urban_class_england_wales) |>
+  summarize(
+    total_population=sum(population),
+    total_area_sqkm=sum(area_sqkm)
+  ) |>
+  ungroup() |>
+  mutate(
+    population_percentage=round(total_population / sum(total_population) * 100, 1),
+    area_percentage=round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  ) |>
+  arrange(rural_urban_class_england_wales)
+
+rural_urban_3_fold_summary_england_wales <- small_areas_england_wales |>
+  group_by(rural_urban_class_england_wales_3_fold) |>
+  summarize(
+    total_population=sum(population),
+    total_area_sqkm=sum(area_sqkm)
+  ) |>
+  ungroup() |>
+  mutate(
+    population_percentage=round(total_population / sum(total_population) * 100, 1),
+    area_percentage=round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  ) |>
+  arrange(rural_urban_class_england_wales_3_fold)
+```
+
+```{r urban-rural-england-wales-summary}
+datatable(rural_urban_summary_england_wales)
+```
+
+### Scottish Classifications
+
+These classifications describe areas according to data from 2022
+
+```{r urban-rural-scotland, include=FALSE}
+ruc_ordering_scotland <- c(
+  "Large Urban Areas",
+  "Other Urban Areas",
+  "Accessible Small Towns",
+  "Remote Small Towns",
+  "Very Remote Small Towns",
+  "Accessible Rural",
+  "Remote Rural",
+  "Very Remote Rural"
+)
+datazone_populations_scotland <- read_sf(CENTROIDS_SCOTLAND_DATAZONES) |>
+  clean_names() |>
+  as_tibble() |>
+  select(
+    area_code=dz_code,
+    area_name=dz_name,
+    population=tot_pop2022
+  )
+datazone_ruc_scotland <- read_csv(RUC_SCOTLAND_CSV) |>
+  clean_names() |>
+  mutate(
+    ur8_name = factor(ur8_name, levels=ruc_ordering_scotland),
+    rural_urban_class_scotland_3_fold=case_when(
+      ur6_name == "Large Urban Areas" ~ "Urban",
+      ur6_name == "Other Urban Areas" ~ "Urban",
+      ur6_name == "Accessible Small Towns" ~ "Small Towns",
+      ur6_name == "Remote Small Towns" ~ "Small Towns",
+      ur6_name == "Accessible Rural" ~ "Rural",
+      ur6_name == "Remote Rural" ~ "Rural"
+    ),
+    ruc_composite_6_fold=case_when(
+     ur6_name == "Large Urban Areas" ~ "Urban, Accessible",
+     ur6_name == "Other Urban Areas" ~ "Urban, Remote",
+     ur6_name == "Accessible Small Towns" ~ "Quite Rural, Accessible",
+     ur6_name == "Remote Small Towns" ~ "Quite Rural, Remote",
+     ur6_name == "Accessible Rural" ~ "Very Rural, Accessible",
+     ur6_name == "Remote Rural" ~ "Very Rural, Remote"
+    ),
+    ruc_composite_3_fold=case_when(
+     ur6_name == "Large Urban Areas" ~ "Urban",
+     ur6_name == "Other Urban Areas" ~ "Urban",
+     ur6_name == "Accessible Small Towns" ~ "Quite Rural",
+     ur6_name == "Remote Small Towns" ~ "Quite Rural",
+     ur6_name == "Accessible Rural" ~ "Very Rural",
+     ur6_name == "Remote Rural" ~ "Very Rural"
+    ),
+    ruc_composite_2_fold=case_when(
+      ruc_composite_3_fold == "Urban" ~ "Urban",
+      ruc_composite_3_fold == "Quite Rural" ~ "Rural",
+      ruc_composite_3_fold == "Very Rural" ~ "Rural"
+    )
+  ) |>
+  select(
+    area_code=dz22_code,
+    rural_urban_class_scotland=ur8_name,
+    rural_urban_class_scotland_3_fold,
+    ruc_composite_6_fold,
+    ruc_composite_3_fold,
+    ruc_composite_2_fold
+  )
+datazones_2022_sf <- read_sf(SHAPES_SCOTLAND_DATAZONES) |>
+  clean_names() |>
+  st_transform(BRITISH_NATIONAL_GRID_CRS) |>
+  mutate(area_sqkm=st_area(geometry) / 1e6) |>
+  select(area_code=dz_code, area_sqkm)
+small_areas_scotland <- datazone_populations_scotland |>
+  left_join(datazone_ruc_scotland, by="area_code") |>
+  left_join(datazones_2022_sf, by="area_code") |>
+  select(-geometry)
+small_areas_scotland_centroids <- read_sf(CENTROIDS_SCOTLAND_DATAZONES) |>
+  clean_names() |>
+  select(area_code=dz_code) |>
+  left_join(small_areas_scotland, by="area_code")
+small_areas_scotland_shapes <- datazones_2022_sf |>
+  select(area_code) |>
+  left_join(small_areas_scotland, by="area_code")
+
+rural_urban_summary_scotland <- small_areas_scotland |>
+  group_by(rural_urban_class_scotland) |>
+  summarize(
+    total_population=sum(population),
+    total_area_sqkm=sum(area_sqkm)
+  ) |>
+  ungroup() |>
+  mutate(
+    population_percentage=round(total_population / sum(total_population) * 100, 1),
+    area_percentage=round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  ) |>
+  arrange(rural_urban_class_scotland)
+
+rural_urban_3_fold_summary_scotland <- small_areas_scotland |>
+  group_by(rural_urban_class_scotland_3_fold) |>
+  summarize(
+    total_population=sum(population),
+    total_area_sqkm=sum(area_sqkm)
+  ) |>
+  ungroup() |>
+  mutate(
+    population_percentage=round(total_population / sum(total_population) * 100, 1),
+    area_percentage=round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  ) |>
+  arrange(rural_urban_class_scotland_3_fold)
+```
+
+```{r urban-rural-scotland-summary}
+datatable(rural_urban_summary_scotland)
+```
+
+### Northern Irish Classifications
+
+These classifications describe areas according to data from 2015.
+
+Northern Irish settlements are classified in bands from A (population) to H (population). The Northern Ireland Statistics and Research Agency do not provide "prescriptive" urban and rural classifications for small areas, but do provide "default" classifications urban, rural, and mixed (for areas that overlap an urban/rural boundary). They also classify areas according to whether or not it takes more than 30 minutes to drive to the nearest major town or city. This can be used to classify settlements as accessible or remote as with the Scottish and English and Welsh classifications.
+
+```{r urban-rural-northern-ireland, include=FALSE}
+ruc_ordering_northern_ireland <- c(
+  "Urban, Accessible",
+  "Urban, Remote",
+  "Mixed urban/rural, Accessible",
+  "Mixed urban/rural, Remote",
+  "Rural, Accessible",
+  "Rural, Remote"
+)
+ruc_ordering_northern_ireland_3_fold <- c(
+  "Urban",
+  "Mixed urban/rural",
+  "Rural"
+)
+soa_shapes_northern_ireland <- read_sf(SHAPES_NORTHERN_IRELAND_SOAS) |>
+  clean_names() |>
+  st_transform(BRITISH_NATIONAL_GRID_CRS) |>
+  mutate(area_sqkm=st_area(geometry) / 1e6) |>
+  select(soa_code, area_sqkm)
+datazone_to_soa_2011_map <- read_csv(CENTROIDS_NORTHERN_IRELAND_DATAZONES) |>
+  clean_names() |>
+  st_as_sf(coords=c("x", "y"), crs=IRISH_GRID_CRS) |>
+  st_transform(BRITISH_NATIONAL_GRID_CRS) |>
+  st_join(soa_shapes_northern_ireland) |>
+  as_tibble() |>
+  select(area_code=dz2021_code, soa_code)
+soa_2011_populations_2022_northern_ireland <- read_csv(POPULATION_NORTHERN_IRELAND_CSV) |>
+  clean_names() |>
+  filter(year==2022) |>
+  left_join(datazone_to_soa_2011_map, by="area_code") |>
+  group_by(soa_code) |>
+  summarize(
+    population=sum(mye),
+  ) |>
+  ungroup() |>
+  left_join(soa_shapes_northern_ireland, by="soa_code") |>
+  select(area_code=soa_code, population, area_sqkm)
+soa_ruc_northern_ireland <- read_csv(RUC_NORTHERN_IRELAND_CSV) |>
+  clean_names() |>
+  mutate(
+    rural_urban_class_northern_ireland_3_fold=x2015_default_urban_rural,
+    accessible_or_remote=ifelse(x30_minutes_yes_no=="Y", "Accessible", "Remote"),
+    rural_urban_class_northern_ireland=paste(
+      rural_urban_class_northern_ireland_3_fold, accessible_or_remote, sep=", "
+    )
+  ) |>
+  select(
+    area_code=soa_code,
+    area_name=soa_name,
+    rural_urban_class_northern_ireland,
+    rural_urban_class_northern_ireland_3_fold,
+    accessible_or_remote
+  )
+soa_composite_uk_ruc_northern_ireland <- read_csv(ALLOCATIONS_NORTHERN_IRELAND_CSV) |>
+  # the mysociety method to map settlement bands onto uk-wide urban-rural classes
+  clean_names() |>
+  mutate(
+    area_code=soa2011,
+    band=case_when(
+      settlement_classification_band == "A" ~ 1,
+      settlement_classification_band == "B" ~ 2,
+      settlement_classification_band == "C" ~ 3,
+      settlement_classification_band == "D" ~ 4,
+      settlement_classification_band == "E" ~ 5,
+      settlement_classification_band == "F" ~ 6,
+      settlement_classification_band == "G" ~ 7,
+      settlement_classification_band == "H" ~ 8,
+    )
+  ) |>
+  group_by(area_code) |>
+  summarize(
+    band=round(mean(band, na.rm=TRUE))
+  ) |>
+  ungroup() |>
+  mutate(
+    ruc_composite_3_fold=case_when(
+       band < 5 ~ "Urban",
+       band < 7 ~ "Quite Rural",
+       TRUE ~ "Very Rural"
+    ),
+    ruc_composite_2_fold=case_when(
+      ruc_composite_3_fold == "Urban" ~ "Urban",
+      ruc_composite_3_fold == "Quite Rural" ~ "Rural",
+      ruc_composite_3_fold == "Very Rural" ~ "Rural"
+    )
+  )
+small_areas_northern_ireland <- soa_ruc_northern_ireland |>
+  left_join(soa_composite_uk_ruc_northern_ireland, by="area_code") |>
+  mutate(
+    ruc_composite_6_fold=case_when(
+      ruc_composite_3_fold == "Urban" & accessible_or_remote == "Accessible" ~ "Urban, Accessible",
+      ruc_composite_3_fold == "Urban" & accessible_or_remote == "Remote" ~ "Urban, Remote",
+      ruc_composite_3_fold == "Quite Rural" & accessible_or_remote == "Accessible" ~ "Quite Rural, Accessible",
+      ruc_composite_3_fold == "Quite Rural" & accessible_or_remote == "Remote" ~ "Quite Rural, Remote",
+      ruc_composite_3_fold == "Very Rural" & accessible_or_remote == "Accessible" ~ "Very Rural, Accessible",
+      ruc_composite_3_fold == "Very Rural" & accessible_or_remote == "Remote" ~ "Very Rural, Remote"
+    )
+  ) |>
+  left_join(soa_2011_populations_2022_northern_ireland, by="area_code") |>
+  filter(!is.na(population), !is.na(area_sqkm))
+small_areas_northern_ireland_shapes <- soa_shapes_northern_ireland |>
+  select(area_code="soa_code") |>
+  left_join(small_areas_northern_ireland, by="area_code")
+
+rural_urban_summary_northern_ireland <- small_areas_northern_ireland |>
+  group_by(rural_urban_class_northern_ireland) |>
+  summarize(
+    total_population=sum(population),
+    total_area_sqkm=sum(area_sqkm)
+  ) |>
+  ungroup() |>
+  mutate(
+    population_percentage=round(total_population / sum(total_population) * 100, 1),
+    area_percentage=round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  ) |>
+  arrange(rural_urban_class_northern_ireland)
+
+rural_urban_3_fold_summary_northern_ireland <- small_areas_northern_ireland |>
+  group_by(rural_urban_class_northern_ireland_3_fold) |>
+  summarize(
+    total_population=sum(population),
+    total_area_sqkm=sum(area_sqkm)
+  ) |>
+  ungroup() |>
+  mutate(
+    population_percentage=round(total_population / sum(total_population) * 100, 1),
+    area_percentage=round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  ) |>
+  arrange(rural_urban_class_northern_ireland_3_fold)
+```
+
+```{r urban-rural-northern-ireland-summary}
+datatable(rural_urban_summary_northern_ireland)
+```
+
+### Composite UK-wide classifications
+
+Following the MySociety approach to building composite UK-wide rural-urban classifications, UK-wide composite classifications can also be built incorporating the more recent English, Welsh, and Scottish classifications. An additional 6-fold classification is also shown below. These are built according to the table below. English and Welsh and Scottish classifications can be straightforwardly mapped onto a UK-wide class. The MySociety approach to assigning Northern Irish SOAs a UK-wide class is not based on the default Northern Irish classifications but instead on the average settlement band of each SOA's constituent SA (small area). SOAs that contain mostly SAs belonging to larger settlements (A-D) are classed as urban, those that contain mostly SAs belonging to smaller settlements are rural (bands E and F) or more rural (bands G and H).
+
+| 6-fold                | 3-fold    | 2-fold | England/Wales class     | Scotland class       | Northern Ireland class         |
+|-----------------------|-----------|--------|-------------------------|----------------------|--------------------------------|
+|Urban, Accessible      |Urban      |Urban   |Urban: Nearer...         |Large Urban Areas     |A,B,C,D                         |
+|Urban, Remote          |Urban      |Urban   |Urban: Further...        |Other Urban Areas     |A,B,C,D; >30mins to nearest town|
+|Quite Rural, Accessible|Quite Rural|Rural   |Larger rural: Nearer...  |Accessible Small Towns|E,F                             |
+|Quite Rural, Remote    |Quite Rural|Rural   |Larger rural: Further... |Remote Small Towns    |E,F; >30mins to nearest town    |
+|Very Rural, Accessible |Very Rural |Rural   |Smaller rural: Nearer... |Accessible Rural      |G,H                             |
+|Very Rural, Remote     |Very Rural |Rural   |Smaller rural: Further...|Remote Rural          |G,H; >30mins to nearest town    |
+
+<br>
+
+The term "quite rural" is used in this 3-fold system instead of MySociety's "rural" in order to keep it distinct from the broader "rural" class within the 2-fold system.
+
+```{r urban-rural-uk-composite}
+ruc_ordering_uk_6_fold <- c(
+  "Urban, Accessible",
+  "Urban, Remote",
+  "Quite Rural, Accessible",
+  "Quite Rural, Remote",
+  "Very Rural, Accessible",
+  "Very Rural, Remote"
+)
+ruc_ordering_uk_3_fold <- c(
+  "Urban",
+  "Quite Rural",
+  "Very Rural"
+)
+ruc_ordering_uk_2_fold <- c(
+  "Urban",
+  "Rural"
+)
+small_areas_uk <- rbind(
+  small_areas_england_wales |>
+    select(
+      area_code,
+      area_name,
+      population,
+      area_sqkm,
+      ruc_composite_6_fold,
+      ruc_composite_3_fold,
+      ruc_composite_2_fold
+    ),
+  small_areas_scotland |>
+    select(
+      area_code,
+      area_name,
+      population,
+      area_sqkm,
+      ruc_composite_6_fold,
+      ruc_composite_3_fold,
+      ruc_composite_2_fold
+    )
+) |>
+  rbind(
+    small_areas_northern_ireland |>
+      select(
+        area_code,
+        area_name,
+        population,
+        area_sqkm,
+        ruc_composite_6_fold,
+        ruc_composite_3_fold,
+        ruc_composite_2_fold
+      )
+  ) |>
+  mutate(
+    ruc_composite_6_fold=factor(ruc_composite_6_fold, levels=ruc_ordering_uk_6_fold),
+    ruc_composite_3_fold=factor(ruc_composite_3_fold, levels=ruc_ordering_uk_3_fold),
+    ruc_composite_2_fold=factor(ruc_composite_2_fold, levels=ruc_ordering_uk_2_fold)
+  )
+small_areas_uk_shapes <- rbind(
+  small_areas_england_wales_shapes |>
+    select(
+      area_code,
+      area_name,
+      population,
+      area_sqkm,
+      ruc_composite_6_fold,
+      ruc_composite_3_fold,
+      ruc_composite_2_fold
+    ),
+  small_areas_scotland_shapes |>
+    select(
+      area_code,
+      area_name,
+      population,
+      area_sqkm,
+      ruc_composite_6_fold,
+      ruc_composite_3_fold,
+      ruc_composite_2_fold
+    )
+) |>
+  rbind(
+    small_areas_northern_ireland_shapes |>
+      select(
+        area_code,
+        area_name,
+        population,
+        area_sqkm,
+        ruc_composite_6_fold,
+        ruc_composite_3_fold,
+        ruc_composite_2_fold
+      )
+  ) |>
+  mutate(
+    ruc_composite_6_fold=factor(ruc_composite_6_fold, levels=ruc_ordering_uk_6_fold),
+    ruc_composite_3_fold=factor(ruc_composite_3_fold, levels=ruc_ordering_uk_3_fold),
+    ruc_composite_2_fold=factor(ruc_composite_2_fold, levels=ruc_ordering_uk_2_fold)
+  )
+
+rural_urban_summary_uk_6_fold <- small_areas_uk |>
+  group_by(ruc_composite_6_fold) |>
+  summarize(
+    total_population=sum(population),
+    total_area_sqkm=sum(area_sqkm)
+  ) |>
+  ungroup() |>
+  mutate(
+    population_percentage=round(total_population / sum(total_population) * 100, 1),
+    area_percentage=round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  ) |>
+  arrange(ruc_composite_6_fold)
+datatable(rural_urban_summary_uk_6_fold)
+
+rural_urban_summary_uk_3_fold <- small_areas_uk |>
+  group_by(ruc_composite_3_fold) |>
+  summarize(
+    total_population=sum(population),
+    total_area_sqkm=sum(area_sqkm)
+  ) |>
+  ungroup() |>
+  mutate(
+    population_percentage=round(total_population / sum(total_population) * 100, 1),
+    area_percentage=round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  ) |>
+  arrange(ruc_composite_3_fold)
+datatable(rural_urban_summary_uk_3_fold)
+
+rural_urban_summary_uk_2_fold <- small_areas_uk |>
+  group_by(ruc_composite_2_fold) |>
+  summarize(
+    total_population=sum(population),
+    total_area_sqkm=sum(area_sqkm)
+  ) |>
+  ungroup() |>
+  mutate(
+    population_percentage=round(total_population / sum(total_population) * 100, 1),
+    area_percentage=round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  ) |>
+  arrange(ruc_composite_2_fold)
+datatable(rural_urban_summary_uk_2_fold)
+```
+
+### Spatial Signatures
+
+Spatial Signatures classify areas along a 16-point scale from Hyper Concentrated Urbanity to Wild Countryside. This scale allows a distinction to be drawn between different levels of urban density, suburbia, and countryside. The spatial signatures only classify areas within Great Britain (England, Scotland, and Wales).
+
+```{r spatial-signatures}
+spatial_signature_ordering <- c(
+  "Hyper concentrated urbanity",
+  "Concentrated urbanity",
+  "Metropolitan urbanity",
+  "Regional urbanity",
+  "Local urbanity",
+  "Dense urban neighbourhoods",
+  "Dense residential neighbourhoods",
+  "Connected residential neighbourhoods",
+  "Gridded residential quarters",
+  "Warehouse/Park land",
+  "Accessible suburbia",
+  "Disconnected suburbia",
+  "Open sprawl",
+  "Urban buffer",
+  "Countryside agriculture",
+  "Wild countryside"
+)
+
+spatial_signatures_sf <- read_sf(SHAPES_SPATIAL_SIGNATURES) |>
+  clean_names() |>
+  st_transform(BRITISH_NATIONAL_GRID_CRS) |>
+  mutate(
+    spatial_signature_type = type,
+    area_sqkm=st_area(geometry) / 1e6
+  )
+small_areas_gb_spatial_signatures <- rbind(
+  small_areas_england_wales_centroids |> select(area_code, population, ruc_composite_6_fold, ruc_composite_3_fold, ruc_composite_2_fold),
+  small_areas_scotland_centroids |> select(area_code, population, ruc_composite_6_fold, ruc_composite_3_fold, ruc_composite_2_fold)
+) |>
+  st_join(spatial_signatures_sf) |>
+  as_tibble() |>
+  filter(!is.na(spatial_signature_type))
+spatial_signature_areas <- spatial_signatures_sf |>
+  as_tibble() |>
+  group_by(spatial_signature_type) |>
+  summarize(
+    total_area_sqkm=sum(area_sqkm)
+  ) |>
+  ungroup() |>
+  mutate(
+    area_percentage=round(total_area_sqkm / sum(total_area_sqkm) * 100, 2)
+  ) |>
+  filter(!is.na(spatial_signature_type))
+
+spatial_signatures_summary <- small_areas_gb_spatial_signatures |>
+  group_by(spatial_signature_type) |>
+  summarize(
+    total_population=sum(population)
+  ) |>
+  ungroup() |>
+  mutate(
+    population_percentage=round(total_population / sum(total_population) * 100, 2)
+  ) |>
+  left_join(spatial_signature_areas, by="spatial_signature_type") |>
+  mutate(
+    spatial_signature_type=factor(spatial_signature_type, levels=spatial_signature_ordering)
+  ) |>
+  arrange(spatial_signature_type)
+datatable(spatial_signatures_summary)
+```
+
+```{r rural-urban-spatial-signature-comparison, include=FALSE}
+ruc_6_vs_spatial_signature <- small_areas_gb_spatial_signatures |>
+  group_by(ruc_composite_6_fold, spatial_signature_type) |>
+  summarize(count=n()) |>
+  ungroup()
+```
+
+There is clear correlation between rural/urban classifications and spatial signatures. But spatial signatures allow for finer grained distinction between areas, especially those within urban settlements.
+
+```{r rural-urban-spatial-signature-comparison-chart}
+ggplot(
+  ruc_6_vs_spatial_signature,
+  aes(
+    x=fct_rev(factor(ruc_composite_6_fold, ruc_ordering_uk_6_fold)),
+    y=fct_rev(factor(spatial_signature_type, spatial_signature_ordering)),
+    fill=count
+  )
+) +
+  geom_tile(show.legend=FALSE) +
+  geom_text(aes(label=count)) +
+  scale_fill_continuous(low="white", high="purple") +
+  labs(
+    title="Areas in Rural/Urban and Spatial Signature Classes",
+    subtitle="English and Welsh LSOAs, Scottish Datazones",
+    x="Composite UK rural/urban class",
+    y="Spatial Signature Type"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle=30, hjust=1)
+  )
+```
+
+## Museums in Urban and Rural Areas
+
+```{r load-museums-data, include=FALSE}
+museums <- load_museums_data(MAPPING_MUSEUMS_CSV) |>
+  st_as_sf(coords=c("longitude", "latitude"), crs=WGS_84_CRS) |>
+  st_transform(BRITISH_NATIONAL_GRID_CRS) |>
+  st_join(
+    small_areas_england_wales_shapes |>
+      select(
+        rural_urban_class_england_wales,
+        rural_urban_class_england_wales_3_fold
+      )
+  ) |>
+  st_join(
+    small_areas_scotland_shapes |>
+      select(
+        rural_urban_class_scotland,
+        rural_urban_class_scotland_3_fold
+      )
+  ) |>
+  st_join(
+    small_areas_northern_ireland_shapes |>
+      select(
+        rural_urban_class_northern_ireland,
+        rural_urban_class_northern_ireland_3_fold
+      )
+  ) |>
+  st_join(
+    small_areas_uk_shapes |>
+      select(ruc_composite_6_fold, ruc_composite_3_fold, ruc_composite_2_fold)
+  ) |>
+  st_join(
+    spatial_signatures_sf |>
+      select(spatial_signature_type)
+  ) |>
+  as_tibble() |>
+  select(-geometry)
+
+make_museums_by_area_type_table <- function(museums_table, area_classification, area_types_table) {
+  museums_table |>
+    filter(!is.na(.data[[area_classification]])) |>
+    group_by(.data[[area_classification]]) |>
+    summarize(total_museums=n()) |>
+    ungroup() |>
+    mutate(museums_percentage=round(total_museums / sum(total_museums) * 100, 1)) |>
+    full_join(area_types_table, by=area_classification) |>
+    mutate(
+      across(everything(), ~replace_na(.x, 0)),
+      population_millions = round(total_population / 1e6, 2),
+      museums_per_100k_people = total_museums / total_population * 1e5,
+      museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+      z_score_per_100k_people = round(scale(museums_per_100k_people, center=TRUE, scale=TRUE), 2),
+      z_score_per_100sqkm = round(scale(museums_per_100sqkm, center=TRUE, scale=TRUE), 2),
+      museums_per_100k_people = round(museums_per_100k_people, 2),
+      museums_per_100sqkm = round(museums_per_100sqkm, 2)
+    ) |>
+    select(
+      `Rural/Urban Class`=.data[[area_classification]],
+      `Population (millions)`=population_millions,
+      `Population (%)`=population_percentage,
+      `Area (sqkm)`=total_area_sqkm,
+      `Museums (N)`=total_museums,
+      `Museums (%)`=museums_percentage,
+      `Museums (per 100k residents)`=museums_per_100k_people,
+      `Z-score (per 100k residents)`=z_score_per_100k_people,
+      `Museums (per 100 sqkm)`=museums_per_100sqkm,
+      `Z-score (per 100 sqkm)`=z_score_per_100sqkm
+    )
+}
+make_museums_total_table <- function(museums_table, area_classification, area_types_table) {
+  cbind(
+    museums_table |>
+      filter(!is.na(.data[[area_classification]])) |>
+      summarize(
+        total_museums=n()
+      ),
+    area_types_table |>
+      summarize(
+        total_population=sum(total_population),
+        total_area_sqkm=sum(total_area_sqkm)
+      )
+  ) |>
+    mutate(
+      rural_urban_class="All",
+      population_millions = round(total_population / 1e6, 2),
+      museums_percentage = 100,
+      population_percentage = 100,
+      area_percentage = 100,
+      museums_per_100k_people = total_museums / total_population * 1e5,
+      museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+      z_score_per_100k_people = NA,
+      z_score_per_100sqkm = NA,
+      museums_per_100k_people = round(museums_per_100k_people, 2),
+      museums_per_100sqkm = round(museums_per_100sqkm, 2)
+    ) |>
+    select(
+      `Rural/Urban Class`=rural_urban_class,
+      `Population (millions)`=population_millions,
+      `Population (%)`=population_percentage,
+      `Area (sqkm)`=total_area_sqkm,
+      `Museums (N)`=total_museums,
+      `Museums (%)`=museums_percentage,
+      `Museums (per 100k residents)`=museums_per_100k_people,
+      `Z-score (per 100k residents)`=z_score_per_100k_people,
+      `Museums (per 100 sqkm)`=museums_per_100sqkm,
+      `Z-score (per 100 sqkm)`=z_score_per_100sqkm
+    )
+}
+```
+
+### Museums across the English and Welsh Rural/Urban Categories
+```{r museums-england-wales-table}
+rural_urban_england_wales_table <- make_museums_by_area_type_table(
+  museums, "rural_urban_class_england_wales", rural_urban_summary_england_wales
+)
+rural_urban_3_fold_england_wales_table <- make_museums_by_area_type_table(
+  museums, "rural_urban_class_england_wales_3_fold", rural_urban_3_fold_summary_england_wales
+)
+total_table_england_wales <- make_museums_total_table(
+  museums, "rural_urban_class_england_wales", rural_urban_summary_england_wales
+)
+england_wales_museums_table <- rural_urban_england_wales_table |>
+  rbind(rural_urban_3_fold_england_wales_table) |>
+  rbind(total_table_england_wales)
+datatable(england_wales_museums_table)
+```
+
+### Museums across the Scottish Rural/Urban Categories
+```{r museums-scotland-table}
+rural_urban_scotland_table <- make_museums_by_area_type_table(
+  museums, "rural_urban_class_scotland", rural_urban_summary_scotland
+)
+rural_urban_3_fold_scotland_table <- make_museums_by_area_type_table(
+  museums, "rural_urban_class_scotland_3_fold", rural_urban_3_fold_summary_scotland
+)
+total_table_scotland <- make_museums_total_table(
+  museums, "rural_urban_class_scotland", rural_urban_summary_scotland
+)
+scotland_museums_table <- rural_urban_scotland_table |>
+  rbind(rural_urban_3_fold_scotland_table) |>
+  rbind(total_table_scotland)
+datatable(scotland_museums_table)
+```
+
+### Museums across the Northern Irish Rural/Urban Categories
+```{r museums-northern-ireland-table}
+rural_urban_northern_ireland_table <- make_museums_by_area_type_table(
+  museums, "rural_urban_class_northern_ireland", rural_urban_summary_northern_ireland
+)
+rural_urban_3_fold_northern_ireland_table <- make_museums_by_area_type_table(
+  museums, "rural_urban_class_northern_ireland_3_fold", rural_urban_3_fold_summary_northern_ireland
+)
+total_table_northern_ireland <- make_museums_total_table(
+  museums, "rural_urban_class_northern_ireland", rural_urban_summary_northern_ireland
+)
+northern_ireland_museums_table <- rural_urban_northern_ireland_table |>
+  rbind(rural_urban_3_fold_northern_ireland_table) |>
+  rbind(total_table_northern_ireland)
+datatable(northern_ireland_museums_table)
+```
+
+### Museums across the Composite UK Rural/Urban Categories
+```{r museums-uk-table}
+rural_urban_uk_table <- make_museums_by_area_type_table(
+  museums, "ruc_composite_6_fold", rural_urban_summary_uk_6_fold
+)
+rural_urban_3_fold_uk_table <- make_museums_by_area_type_table(
+  museums, "ruc_composite_3_fold", rural_urban_summary_uk_3_fold
+)
+total_table_uk <- make_museums_total_table(
+  museums, "ruc_composite_3_fold", rural_urban_summary_uk_3_fold
+)
+uk_museums_table <- rural_urban_uk_table |>
+  rbind(rural_urban_3_fold_uk_table) |>
+  rbind(total_table_uk)
+datatable(uk_museums_table)
+```
+
+### Museums across the Spatial Signatures
+```{r museums-spatial-signatures-table}
+rural_urban_spatial_signatures_table <- make_museums_by_area_type_table(
+  museums, "spatial_signature_type", spatial_signatures_summary
+)
+total_table_spatial_signatures <- make_museums_total_table(
+  museums, "spatial_signature_type", spatial_signatures_summary
+)
+spatial_signatures_museums_table <- rural_urban_spatial_signatures_table |>
+  rbind(total_table_spatial_signatures) |>
+  rename(`Spatial Signature Type`=`Rural/Urban Class`)
+datatable(spatial_signatures_museums_table)
+```
