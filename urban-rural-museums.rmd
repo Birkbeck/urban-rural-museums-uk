@@ -50,8 +50,11 @@ CENTROIDS_NORTHERN_IRELAND_DATAZONES <- "data/centroids-northern-ireland-datazon
     * [Composite UK-Wide Classifications](#composite-uk-wide-classifications)
     * [Spatial Signatures](#spatial-signatures)
 * [Museums in Urban and Rural Areas](#museums-in-urban-and-rural-areas)
-    * [Comparion by country and region](#comparison-by-country-and-region)
-    * [Comparison by age, size, governance, and subject matter](#comparison-by-age-size-governance-and-subject-matter)
+    * [Museums across the English and Welsh Rural/Urban Categories](#museums-across-the-english-and-welsh-ruralurban-categories)
+    * [Museums across the Scottish Rural/Urban Categories](#museums-across-the-scottish-ruralurban-categories)
+    * [Museums across the Northern Irish Rural/Urban Categories](#museums-across-the-northern-irish-ruralurban-categories)
+    * [Museums across the Composite UK Rural/Urban Categories](#museums-across-the-composite-uk-ruralurban-categories)
+    * [Museums across the Spatial Signatures](#museums-across-the-spatial-signatures)
 
 ## Urban-Rural Classifications
 
