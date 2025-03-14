@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = FALSE)
 library(ggplot2)
 library(DT)
 library(janitor)
+library(openxlsx)
 library(sf)
 library(tidyverse)
 
@@ -70,17 +71,16 @@ These classifications describe areas according to data from 2021
 
 ```{r urban-rural-england-wales, include=FALSE}
 ruc_ordering_england_wales <- c(
+  "Urban",
   "Urban: Nearer to a major town or city",
   "Urban: Further from a major town or city",
+  "Larger rural",
   "Larger rural: Nearer to a major town or city",
   "Larger rural: Further from a major town or city",
+  "Smaller rural",
   "Smaller rural: Nearer to a major town or city",
-  "Smaller rural: Further from a major town or city"
-)
-ruc_3_fold_ordering_england_wales <- c(
-  "Urban",
-  "Larger rural",
-  "Smaller rural"
+  "Smaller rural: Further from a major town or city",
+  "All"
 )
 lsoa_populations_england_and_wales <- read_csv(POPULATION_ENGLAND_WALES_CSV) |>
   clean_names() |>
@@ -96,10 +96,10 @@ lsoa_ruc_england_wales <- read_csv(RUC_ENGLAND_WALES_CSV) |>
     rural_urban_class_england_wales_3_fold=case_when(
       ruc21nm == "Urban: Nearer to a major town or city" ~ "Urban",
       ruc21nm == "Urban: Further from a major town or city" ~ "Urban",
-      ruc21nm == "Larger rural: Nearer to a major town or city" ~ "Larger Rural",
-      ruc21nm == "Larger rural: Further from a major town or city" ~ "Larger Rural",
-      ruc21nm == "Smaller rural: Nearer to a major town or city" ~ "Smaller Rural",
-      ruc21nm == "Smaller rural: Further from a major town or city" ~ "Smaller Rural"
+      ruc21nm == "Larger rural: Nearer to a major town or city" ~ "Larger rural",
+      ruc21nm == "Larger rural: Further from a major town or city" ~ "Larger rural",
+      ruc21nm == "Smaller rural: Nearer to a major town or city" ~ "Smaller rural",
+      ruc21nm == "Smaller rural: Further from a major town or city" ~ "Smaller rural"
     ),
     ruc_composite_6_fold=case_when(
      ruc21nm == "Urban: Nearer to a major town or city" ~ "Urban, Accessible",
@@ -134,7 +134,7 @@ lsoa_ruc_england_wales <- read_csv(RUC_ENGLAND_WALES_CSV) |>
 lsoas_2021_sf <- read_sf(SHAPES_ENGLAND_WALES_LSOAS) |>
   clean_names() |>
   st_transform(BRITISH_NATIONAL_GRID_CRS) |>
-  mutate(area_sqkm=st_area(geometry) / 1e6) |>
+  mutate(area_sqkm=round(st_area(geometry) / 1e6)) |>
   select(area_code=lsoa21cd, area_sqkm)
 small_areas_england_wales <- lsoa_populations_england_and_wales |>
   left_join(lsoa_ruc_england_wales, by="area_code") |>
@@ -185,14 +185,18 @@ These classifications describe areas according to data from 2022
 
 ```{r urban-rural-scotland, include=FALSE}
 ruc_ordering_scotland <- c(
+  "Urban",
   "Large Urban Areas",
   "Other Urban Areas",
+  "Small Towns",
   "Accessible Small Towns",
   "Remote Small Towns",
   "Very Remote Small Towns",
+  "Rural",
   "Accessible Rural",
   "Remote Rural",
-  "Very Remote Rural"
+  "Very Remote Rural",
+  "All"
 )
 datazone_populations_scotland <- read_sf(CENTROIDS_SCOTLAND_DATAZONES) |>
   clean_names() |>
@@ -247,7 +251,7 @@ datazone_ruc_scotland <- read_csv(RUC_SCOTLAND_CSV) |>
 datazones_2022_sf <- read_sf(SHAPES_SCOTLAND_DATAZONES) |>
   clean_names() |>
   st_transform(BRITISH_NATIONAL_GRID_CRS) |>
-  mutate(area_sqkm=st_area(geometry) / 1e6) |>
+  mutate(area_sqkm=round(st_area(geometry) / 1e6)) |>
   select(area_code=dz_code, area_sqkm)
 small_areas_scotland <- datazone_populations_scotland |>
   left_join(datazone_ruc_scotland, by="area_code") |>
@@ -300,22 +304,21 @@ Northern Irish settlements are classified in bands from A (population) to H (pop
 
 ```{r urban-rural-northern-ireland, include=FALSE}
 ruc_ordering_northern_ireland <- c(
+  "Urban",
   "Urban, Accessible",
   "Urban, Remote",
+  "Mixed urban/rural",
   "Mixed urban/rural, Accessible",
   "Mixed urban/rural, Remote",
+  "Rural",
   "Rural, Accessible",
-  "Rural, Remote"
-)
-ruc_ordering_northern_ireland_3_fold <- c(
-  "Urban",
-  "Mixed urban/rural",
-  "Rural"
+  "Rural, Remote",
+  "All"
 )
 soa_shapes_northern_ireland <- read_sf(SHAPES_NORTHERN_IRELAND_SOAS) |>
   clean_names() |>
   st_transform(BRITISH_NATIONAL_GRID_CRS) |>
-  mutate(area_sqkm=st_area(geometry) / 1e6) |>
+  mutate(area_sqkm=round(st_area(geometry) / 1e6)) |>
   select(soa_code, area_sqkm)
 datazone_to_soa_2011_map <- read_csv(CENTROIDS_NORTHERN_IRELAND_DATAZONES) |>
   clean_names() |>
@@ -451,22 +454,17 @@ Following the MySociety approach to building composite UK-wide rural-urban class
 The term "quite rural" is used in this 3-fold system instead of MySociety's "rural" in order to keep it distinct from the broader "rural" class within the 2-fold system.
 
 ```{r urban-rural-uk-composite}
-ruc_ordering_uk_6_fold <- c(
+ruc_ordering_uk <- c(
+  "Urban",
   "Urban, Accessible",
   "Urban, Remote",
+  "Quite Rural",
   "Quite Rural, Accessible",
   "Quite Rural, Remote",
+  "Very Rural",
   "Very Rural, Accessible",
-  "Very Rural, Remote"
-)
-ruc_ordering_uk_3_fold <- c(
-  "Urban",
-  "Quite Rural",
-  "Very Rural"
-)
-ruc_ordering_uk_2_fold <- c(
-  "Urban",
-  "Rural"
+  "Very Rural, Remote",
+  "All"
 )
 small_areas_uk <- rbind(
   small_areas_england_wales |>
@@ -503,9 +501,9 @@ small_areas_uk <- rbind(
       )
   ) |>
   mutate(
-    ruc_composite_6_fold=factor(ruc_composite_6_fold, levels=ruc_ordering_uk_6_fold),
-    ruc_composite_3_fold=factor(ruc_composite_3_fold, levels=ruc_ordering_uk_3_fold),
-    ruc_composite_2_fold=factor(ruc_composite_2_fold, levels=ruc_ordering_uk_2_fold)
+    ruc_composite_6_fold=factor(ruc_composite_6_fold, levels=ruc_ordering_uk),
+    ruc_composite_3_fold=factor(ruc_composite_3_fold, levels=ruc_ordering_uk),
+    ruc_composite_2_fold=factor(ruc_composite_2_fold, levels=ruc_ordering_uk)
   )
 small_areas_uk_shapes <- rbind(
   small_areas_england_wales_shapes |>
@@ -542,9 +540,9 @@ small_areas_uk_shapes <- rbind(
       )
   ) |>
   mutate(
-    ruc_composite_6_fold=factor(ruc_composite_6_fold, levels=ruc_ordering_uk_6_fold),
-    ruc_composite_3_fold=factor(ruc_composite_3_fold, levels=ruc_ordering_uk_3_fold),
-    ruc_composite_2_fold=factor(ruc_composite_2_fold, levels=ruc_ordering_uk_2_fold)
+    ruc_composite_6_fold=factor(ruc_composite_6_fold, levels=ruc_ordering_uk),
+    ruc_composite_3_fold=factor(ruc_composite_3_fold, levels=ruc_ordering_uk),
+    ruc_composite_2_fold=factor(ruc_composite_2_fold, levels=ruc_ordering_uk)
   )
 
 rural_urban_summary_uk_6_fold <- small_areas_uk |>
@@ -611,7 +609,8 @@ spatial_signature_ordering <- c(
   "Open sprawl",
   "Urban buffer",
   "Countryside agriculture",
-  "Wild countryside"
+  "Wild countryside",
+  "All"
 )
 
 spatial_signatures_sf <- read_sf(SHAPES_SPATIAL_SIGNATURES) |>
@@ -619,7 +618,7 @@ spatial_signatures_sf <- read_sf(SHAPES_SPATIAL_SIGNATURES) |>
   st_transform(BRITISH_NATIONAL_GRID_CRS) |>
   mutate(
     spatial_signature_type = type,
-    area_sqkm=st_area(geometry) / 1e6
+    area_sqkm=round(st_area(geometry) / 1e6)
   )
 small_areas_gb_spatial_signatures <- rbind(
   small_areas_england_wales_centroids |> select(area_code, population, ruc_composite_6_fold, ruc_composite_3_fold, ruc_composite_2_fold),
@@ -670,7 +669,7 @@ There is clear correlation between rural/urban classifications and spatial signa
 ggplot(
   ruc_6_vs_spatial_signature,
   aes(
-    x=fct_rev(factor(ruc_composite_6_fold, ruc_ordering_uk_6_fold)),
+    x=fct_rev(factor(ruc_composite_6_fold, ruc_ordering_uk)),
     y=fct_rev(factor(spatial_signature_type, spatial_signature_ordering)),
     fill=count
   )
@@ -808,12 +807,15 @@ rural_urban_england_wales_table <- make_museums_by_area_type_table(
 rural_urban_3_fold_england_wales_table <- make_museums_by_area_type_table(
   museums, "rural_urban_class_england_wales_3_fold", rural_urban_3_fold_summary_england_wales
 )
+datatable(rural_urban_3_fold_england_wales_table)
 total_table_england_wales <- make_museums_total_table(
   museums, "rural_urban_class_england_wales", rural_urban_summary_england_wales
 )
 england_wales_museums_table <- rural_urban_england_wales_table |>
   rbind(rural_urban_3_fold_england_wales_table) |>
-  rbind(total_table_england_wales)
+  rbind(total_table_england_wales) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_england_wales)) |>
+  arrange(`Rural/Urban Class`)
 datatable(england_wales_museums_table)
 ```
 
@@ -830,7 +832,9 @@ total_table_scotland <- make_museums_total_table(
 )
 scotland_museums_table <- rural_urban_scotland_table |>
   rbind(rural_urban_3_fold_scotland_table) |>
-  rbind(total_table_scotland)
+  rbind(total_table_scotland) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_scotland)) |>
+  arrange(`Rural/Urban Class`)
 datatable(scotland_museums_table)
 ```
 
@@ -847,7 +851,9 @@ total_table_northern_ireland <- make_museums_total_table(
 )
 northern_ireland_museums_table <- rural_urban_northern_ireland_table |>
   rbind(rural_urban_3_fold_northern_ireland_table) |>
-  rbind(total_table_northern_ireland)
+  rbind(total_table_northern_ireland) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_northern_ireland)) |>
+  arrange(`Rural/Urban Class`)
 datatable(northern_ireland_museums_table)
 ```
 
@@ -864,7 +870,9 @@ total_table_uk <- make_museums_total_table(
 )
 uk_museums_table <- rural_urban_uk_table |>
   rbind(rural_urban_3_fold_uk_table) |>
-  rbind(total_table_uk)
+  rbind(total_table_uk) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_uk)) |>
+  arrange(`Rural/Urban Class`)
 datatable(uk_museums_table)
 ```
 
@@ -878,6 +886,21 @@ total_table_spatial_signatures <- make_museums_total_table(
 )
 spatial_signatures_museums_table <- rural_urban_spatial_signatures_table |>
   rbind(total_table_spatial_signatures) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, spatial_signature_ordering)) |>
+  arrange(`Rural/Urban Class`) |>
   rename(`Spatial Signature Type`=`Rural/Urban Class`)
 datatable(spatial_signatures_museums_table)
+```
+
+```{r save-tables}
+write.xlsx(
+  list(
+    "UK"=uk_museums_table,
+    "England and Wales"=england_wales_museums_table,
+    "Scotland"=scotland_museums_table,
+    "Northern Ireland"=northern_ireland_museums_table,
+    "Spatial Signatures"=spatial_signatures_museums_table
+  ),
+  file="urban-rural-museums.xlsx"
+)
 ```
