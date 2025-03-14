@@ -41,6 +41,31 @@ SHAPES_REGIONS <- "data/shapes-regions/RGN_DEC_24_EN_BFC.shp"
 CENTROIDS_ENGLAND_WALES_LSOAS <- "data/centroids-england-wales-lsoas-2021/LSOA_PopCentroids_EW_2021_V3.shp"
 CENTROIDS_SCOTLAND_DATAZONES <- "data/centroids-scotland-datazones-2022/SG_DataZoneCent_2022.shp"
 CENTROIDS_NORTHERN_IRELAND_DATAZONES <- "data/centroids-northern-ireland-datazones-2021.csv"
+
+era_ordering <- c("pre-1900", "1900-1944", "1945-1989", "1990-present")
+era_colours <- c(
+  "pre-1900"="#990066",
+  "1900-1944"="#E619A1",
+  "1945-1989"="#E085C2",
+  "1990-present"="#F0DBE9"
+)
+
+uk_rural_urban_bars_theme <- theme_minimal() + theme(
+  plot.background = element_rect(fill="white", colour="white"),
+  panel.background = element_rect(fill=NA, colour="white"),
+  panel.grid.major.y = element_line(colour=NA),
+  panel.grid.minor.y = element_line(colour=NA),
+  plot.title = element_text(size=16, hjust=0.5),
+  plot.subtitle = element_text(size=12, hjust=0.5),
+  legend.position=c(0.75, 0.98),
+  axis.title.x = element_text(size=16, colour="black"),
+  axis.title.y = element_text(size=16, colour="black"),
+  axis.text.x = element_text(size=11, colour="#666666"),
+  axis.text.y = element_text(size=11, colour="#666666"),
+  axis.ticks = element_blank(),
+  axis.line.x.bottom = element_line(colour="darkgrey"),
+  axis.line.y.left = element_line(colour="darkgrey")
+)
 ```
 </details>
 
@@ -58,6 +83,7 @@ CENTROIDS_NORTHERN_IRELAND_DATAZONES <- "data/centroids-northern-ireland-datazon
     * [Museums across the Composite UK Rural/Urban Categories](#museums-across-the-composite-uk-ruralurban-categories)
     * [Museums across the Spatial Signatures](#museums-across-the-spatial-signatures)
 * [Museums by Region](#museums-by-region)
+* [Museum Types in Urban and Rural Areas](#museum-types-in-urban-and-rural-areas)
 
 ## Urban-Rural Classifications
 
@@ -987,7 +1013,7 @@ region_pop_and_museums_by_rural_urban <- rbind(
   arrange(factor(ruc_composite_3_fold, ruc_ordering_uk)) |>
   group_by(region, thing) |>
   mutate(
-    label_position = ifelse(percentage > 10, cumsum(percentage) - percentage, NA)
+    label_position = ifelse(percentage > 7.5, cumsum(percentage) - percentage, NA)
   ) |>
   ungroup() |>
   group_by(region, ruc_composite_3_fold) |>
@@ -1038,12 +1064,12 @@ urban_rural_pop_and_museums_by_region <- ggplot(
     position="stack"
   ) +
   geom_text(
-    data=region_pop_and_museums_by_rural_urban |> filter(thing=="population"),
+    data=region_pop_and_museums_by_rural_urban |> filter(thing=="population" & !is.na(label_position)),
     aes(x=label_position, label=paste0(percentage, "%")), hjust="left",
     size=3
   ) +
   geom_text(
-    data=region_pop_and_museums_by_rural_urban |> filter(thing=="museums"),
+    data=region_pop_and_museums_by_rural_urban |> filter(thing=="museums" & !is.na(label_position)),
     aes(x=label_position, label=paste0(percentage, "% (", difference, ")")), hjust="left",
     size=3
   ) +
@@ -1079,7 +1105,7 @@ urban_rural_pop_and_museums_by_region <- ggplot(
   scale_x_continuous(expand=c(0,0), limits=c(0, 111)) +
   scale_fill_manual(values=c("Urban"="#C383E6", "Quite Rural"="#A0F7BE", "Very Rural"="#6BD48F")) +
   scale_alpha_manual(values=c("museums"=1.0, "population"=0.5)) +
-  guides(fill=guide_legend(reverse=TRUE, direction = "horizontal"), alpha=FALSE) +
+  guides(fill=guide_legend(reverse=TRUE, direction = "horizontal"), alpha="none") +
   labs(
     title = "       Population and Museums along the Urban-Rural Spectrum \n            in the Countries and Regions of the United Kingdom",
     x = "Percentage",
@@ -1100,4 +1126,65 @@ urban_rural_pop_and_museums_by_region <- ggplot(
   )
 urban_rural_pop_and_museums_by_region
 ggsave(file="urban_rural_pop_and_museums_by_region.png", plot=urban_rural_pop_and_museums_by_region, width=10, height=8)
+```
+
+## Museum Types in Urban and Rural Areas
+
+```{r uk-spatial-signature-vs-era-table, include=FALSE}
+uk_spatial_signature_era_table <- museums |>
+  filter(!is.na(spatial_signature_type)) |>
+  group_by(era, spatial_signature_type) |>
+  summarize(
+    total_museums=n()
+  ) |>
+  ungroup() |>
+  complete(era, spatial_signature_type, fill=list(total_museums=0)) |>
+  full_join(spatial_signatures_summary, by="spatial_signature_type") |>
+  mutate(
+    across(everything(), ~replace_na(.x, 0)),
+    population_millions = round(total_population / 1e6, 2),
+    museums_per_100k_people = total_museums / total_population * 1e5,
+    museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+    z_score_per_100k_people = round(scale(museums_per_100k_people, center=TRUE, scale=TRUE), 2),
+    z_score_per_100sqkm = round(scale(museums_per_100sqkm, center=TRUE, scale=TRUE), 2),
+    museums_per_100k_people = round(museums_per_100k_people, 2),
+    museums_per_100sqkm = round(museums_per_100sqkm, 2)
+  )
+```
+
+```{r uk-spatial-signature-vs-era-area-chart, warning=FALSE, echo=FALSE, fig.align="center", fig.width = 10, fig.height = 10}
+lines_table <- uk_spatial_signature_era_table |>
+  filter(spatial_signature_type != "All" & era != "all") |>
+  arrange(factor(era, era_ordering), fct_rev(factor(spatial_signature_type, spatial_signature_ordering)))
+
+spatial_sig_per_capita_area_era <- ggplot(
+  data = lines_table |> arrange(spatial_signature_type, era),
+  aes(
+    fill = fct_rev(factor(era, era_ordering)),
+    y = museums_per_100k_people, 
+    x = factor(spatial_signature_type, spatial_signature_ordering),
+    group = fct_rev(factor(era, era_ordering))
+  )
+) +
+  geom_area(position="stack") +
+  scale_fill_manual(values=era_colours) +
+  guides(fill=guide_legend(reverse=TRUE, direction = "horizontal")) +
+  labs(
+    title = "Age of Museums in Urban and Rural Areas",
+    subtitle = "(Great Britain only)",
+    x = "Spatial Signature",
+    y = "Museums per 100k residents",
+    fill = "Time of Museum Founding: "
+  ) +
+  uk_rural_urban_bars_theme +
+  theme(
+    legend.position = "top",
+    axis.text.x = element_text(angle=60, hjust=1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+ggsave("spatial_sig_per_capita_area_era.png", spatial_sig_per_capita_area_era, width=10, height=10)
+
+spatial_sig_per_capita_area_era
 ```
