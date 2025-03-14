@@ -24,4 +24,5 @@ Data files include:
     * centroids [Spatialdata.gov.scot](https://www.data.gov.uk/dataset/d5b6fbc1-8a79-46c6-ac64-2de60c6fcb70/data-zone-centroids-2022)
     * shapes-northern-ireland-soas-2011.zip - Digital vector boundaries for Northern Ireland Super Ouptut Areas, [NISRA](https://www.nisra.gov.uk/publications/super-output-area-boundaries-gis-format)
     * centroids-northern-ireland-datazones-2021.csv - Population weighted centroids for Northern Irish Datazones, [NISRA](https://www.nisra.gov.uk/publications/census-2021-population-weighted-centroids-data-zones-and-super-data-zones)
-    * spatial-signatures-gb.zip - The spatial signatures digital vector boundareis for Great Britain (not included in this repository as it is a very large file), [CDRC](https://data.cdrc.ac.uk/dataset/spatial-signatures-great-britain)
+    * spatial-signatures-gb.zip - The spatial signatures digital vector boundaries for Great Britain (not included in this repository as it is a very large file), [CDRC](https://data.cdrc.ac.uk/dataset/spatial-signatures-great-britain)
+    * shapes-regions.zip - Digital vector boundaries of the regions of England, [ONS](https://geoportal.statistics.gov.uk/datasets/f181d27b5bac477388ce81ad935a1227_0/explore?location=52.723884%2C-2.489483%2C7.56)
