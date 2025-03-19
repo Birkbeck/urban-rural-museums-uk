@@ -22,7 +22,7 @@ WGS_84_CRS <- 4326
 BRITISH_NATIONAL_GRID_CRS <- 27700
 IRISH_GRID_CRS <- 29902
 
-MAPPING_MUSEUMS_CSV <- "data/museums-2025-01-07.csv"
+MAPPING_MUSEUMS_CSV <- "data/museums-2025-03-13.csv"
 
 POPULATION_ENGLAND_WALES_CSV <- "data/population-england-wales-lsoas-2022.csv"
 POPULATION_NORTHERN_IRELAND_CSV <- "data/population-northern-ireland-datazones-2021-2022.csv"
@@ -980,6 +980,14 @@ uk_museums_table <- rural_urban_uk_table |>
 datatable(uk_museums_table)
 ```
 
+```{r museums-uk-3-fold-table}
+uk_3_fold_museums_table <- rural_urban_3_fold_uk_table |>
+  rbind(total_table_uk) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_uk)) |>
+  arrange(`Rural/Urban Class`)
+datatable(uk_3_fold_museums_table)
+```
+
 ### Museums across the Spatial Signatures
 ```{r museums-spatial-signatures-table}
 rural_urban_spatial_signatures_table <- make_museums_by_area_type_table(
@@ -999,7 +1007,8 @@ datatable(spatial_signatures_museums_table)
 ```{r save-tables}
 write.xlsx(
   list(
-    "UK"=uk_museums_table,
+    "UK-6-fold"=uk_museums_table,
+    "UK-3-fold"=uk_3_fold_museums_table,
     "England and Wales"=england_wales_museums_table,
     "Scotland"=scotland_museums_table,
     "Northern Ireland"=northern_ireland_museums_table,
