@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = FALSE)
 library(ggplot2)
 library(DT)
 library(janitor)
+library(openxlsx)
 library(sf)
 library(tidyverse)
 
@@ -21,7 +22,7 @@ WGS_84_CRS <- 4326
 BRITISH_NATIONAL_GRID_CRS <- 27700
 IRISH_GRID_CRS <- 29902
 
-MAPPING_MUSEUMS_CSV <- "data/museums-2025-01-07.csv"
+MAPPING_MUSEUMS_CSV <- "data/museums-2025-03-13.csv"
 
 POPULATION_ENGLAND_WALES_CSV <- "data/population-england-wales-lsoas-2022.csv"
 POPULATION_NORTHERN_IRELAND_CSV <- "data/population-northern-ireland-datazones-2021-2022.csv"
@@ -35,10 +36,131 @@ SHAPES_ENGLAND_WALES_LSOAS <- "data/shapes-england-wales-lsoas-2021/LSOA_2021_EW
 SHAPES_SCOTLAND_DATAZONES <- "data/shapes-scotland-datazones-2022/SG_DataZoneBdry_2022_MHW.shp"
 SHAPES_NORTHERN_IRELAND_SOAS <- "data/shapes-northern-ireland-soas-2011/SOA2011.shp"
 SHAPES_SPATIAL_SIGNATURES <- "data/spatial-signatures-gb/spatial_signatures_GB_clean.shp"
+SHAPES_REGIONS <- "data/shapes-regions/RGN_DEC_24_EN_BFC.shp"
 
 CENTROIDS_ENGLAND_WALES_LSOAS <- "data/centroids-england-wales-lsoas-2021/LSOA_PopCentroids_EW_2021_V3.shp"
 CENTROIDS_SCOTLAND_DATAZONES <- "data/centroids-scotland-datazones-2022/SG_DataZoneCent_2022.shp"
 CENTROIDS_NORTHERN_IRELAND_DATAZONES <- "data/centroids-northern-ireland-datazones-2021.csv"
+
+era_ordering <- c("pre-1900", "1900-1944", "1945-1989", "1990-present")
+era_colours <- c(
+  "pre-1900"="#990066",
+  "1900-1944"="#E619A1",
+  "1945-1989"="#E085C2",
+  "1990-present"="#F0DBE9"
+)
+era_labels <- c(
+  "pre-1900"="pre-1900",
+  "1900-1944"="1900-1944",
+  "1945-1989"="1945-1989",
+  "1990-present"="1990-present",
+  "all"="All"
+)
+
+size_ordering <- c(
+  "huge",
+  "large",
+  "medium",
+  "small",
+  "unknown"
+)
+size_labels <- c(
+  "huge"="Huge",
+  "large"="Large",
+  "medium"="Medium",
+  "small"="Small",
+  "unknown"="Unknown",
+  "all"="All"
+)
+
+governance_ordering <- c(
+  "National",
+  "Local_Authority",
+  "Other_Government",
+  "University",
+  "Not_for_profit",
+  "English_Heritage",
+  "National_Trust",
+  "National_Trust_for_Scotland",
+  "Historic_Environment_Scotland",
+  "Private",
+  "Unknown"
+)
+governance_labels <- c(
+  "National"="National",
+  "Local_Authority"="Local Authority",
+  "Other_Government"="Other Gov",
+  "University"="University",
+  "Not_for_profit"="Not-for-profit",
+  "English_Heritage"="English Heritage",
+  "National_Trust"="National Trust",
+  "National_Trust_for_Scotland"="Nat Trust Scot",
+  "Historic_Environment_Scotland"="Hist Env Scot",
+  "Private"="Private",
+  "Unknown"="Unknown"
+)
+
+era_size_governance_ordering <- c(era_ordering, size_ordering, governance_ordering)
+era_size_governance_labels <- c(era_labels, size_labels, governance_labels)
+
+subject_labels <- c(
+  "Archaeology"="Archaeology",
+  "Arts"="Arts",
+  "Belief_and_identity"="Belief & identity",
+  "Buildings"="Buildings",
+  "Communications"="Communications",
+  "Food_and_drink"="Food & drink",
+  "Industry_and_manufacture"="Industry & manufacture",
+  "Leisure_and_sport"="Leisure & sport",
+  "Local_Histories"="Local histories",
+  "Medicine_and_health"="Medicine & health",
+  "Natural_world"="Natural world",
+  "Personality"="Personality",
+  "Rural_Industry"="Rural industry",
+  "Science_and_technology"="Science & technology",
+  "Sea_and_seafaring"="Sea & seafaring",
+  "Services"="Services",
+  "Transport"="Transport",
+  "Utilities"="Utilities",
+  "War_and_conflict"="War & conflict",
+  "Mixed"="Mixed",
+  "Other"="Other",
+  "all"="All"
+)
+
+country_region_ordering <- c(
+  "Northern Ireland",
+  "Scotland",
+  "Wales",
+  "England",
+  "North East",
+  "North West",
+  "Yorks & Humber",
+  "East Midlands",
+  "West Midlands",
+  "East of England",
+  "London",
+  "South East",
+  "South West",
+  "United Kingdom"
+)
+
+uk_rural_urban_bars_theme <- theme_minimal() + theme(
+  plot.background = element_rect(fill="white", colour="white"),
+  panel.background = element_rect(fill=NA, colour="white"),
+  panel.grid.major.y = element_line(colour=NA),
+  panel.grid.minor.y = element_line(colour=NA),
+  plot.title = element_text(size=16, hjust=0.5),
+  plot.subtitle = element_text(size=12, hjust=0.5),
+  legend.position=c(0.75, 0.98),
+  axis.title.x = element_text(size=16, colour="black"),
+  axis.title.y = element_text(size=16, colour="black"),
+  axis.text.x = element_text(size=11, colour="#666666"),
+  axis.text.y = element_text(size=11, colour="#666666"),
+  axis.ticks = element_blank(),
+  axis.line.x.bottom = element_line(colour="darkgrey"),
+  axis.line.y.left = element_line(colour="darkgrey")
+)
 ```
 </details>
 
@@ -55,6 +177,8 @@ CENTROIDS_NORTHERN_IRELAND_DATAZONES <- "data/centroids-northern-ireland-datazon
     * [Museums across the Northern Irish Rural/Urban Categories](#museums-across-the-northern-irish-ruralurban-categories)
     * [Museums across the Composite UK Rural/Urban Categories](#museums-across-the-composite-uk-ruralurban-categories)
     * [Museums across the Spatial Signatures](#museums-across-the-spatial-signatures)
+* [Museums by Region](#museums-by-region)
+* [Museum Types in Urban and Rural Areas](#museum-types-in-urban-and-rural-areas)
 
 ## Urban-Rural Classifications
 
@@ -70,18 +194,21 @@ These classifications describe areas according to data from 2021
 
 ```{r urban-rural-england-wales, include=FALSE}
 ruc_ordering_england_wales <- c(
+  "Urban",
   "Urban: Nearer to a major town or city",
   "Urban: Further from a major town or city",
+  "Larger rural",
   "Larger rural: Nearer to a major town or city",
   "Larger rural: Further from a major town or city",
+  "Smaller rural",
   "Smaller rural: Nearer to a major town or city",
-  "Smaller rural: Further from a major town or city"
+  "Smaller rural: Further from a major town or city",
+  "All"
 )
-ruc_3_fold_ordering_england_wales <- c(
-  "Urban",
-  "Larger rural",
-  "Smaller rural"
-)
+regions_shapes <- read_sf(SHAPES_REGIONS) |>
+  clean_names() |>
+  st_transform(BRITISH_NATIONAL_GRID_CRS) |>
+  select(region=rgn24nm)
 lsoa_populations_england_and_wales <- read_csv(POPULATION_ENGLAND_WALES_CSV) |>
   clean_names() |>
   select(
@@ -96,10 +223,10 @@ lsoa_ruc_england_wales <- read_csv(RUC_ENGLAND_WALES_CSV) |>
     rural_urban_class_england_wales_3_fold=case_when(
       ruc21nm == "Urban: Nearer to a major town or city" ~ "Urban",
       ruc21nm == "Urban: Further from a major town or city" ~ "Urban",
-      ruc21nm == "Larger rural: Nearer to a major town or city" ~ "Larger Rural",
-      ruc21nm == "Larger rural: Further from a major town or city" ~ "Larger Rural",
-      ruc21nm == "Smaller rural: Nearer to a major town or city" ~ "Smaller Rural",
-      ruc21nm == "Smaller rural: Further from a major town or city" ~ "Smaller Rural"
+      ruc21nm == "Larger rural: Nearer to a major town or city" ~ "Larger rural",
+      ruc21nm == "Larger rural: Further from a major town or city" ~ "Larger rural",
+      ruc21nm == "Smaller rural: Nearer to a major town or city" ~ "Smaller rural",
+      ruc21nm == "Smaller rural: Further from a major town or city" ~ "Smaller rural"
     ),
     ruc_composite_6_fold=case_when(
      ruc21nm == "Urban: Nearer to a major town or city" ~ "Urban, Accessible",
@@ -134,7 +261,7 @@ lsoa_ruc_england_wales <- read_csv(RUC_ENGLAND_WALES_CSV) |>
 lsoas_2021_sf <- read_sf(SHAPES_ENGLAND_WALES_LSOAS) |>
   clean_names() |>
   st_transform(BRITISH_NATIONAL_GRID_CRS) |>
-  mutate(area_sqkm=st_area(geometry) / 1e6) |>
+  mutate(area_sqkm=round(as.numeric(st_area(geometry)) / 1e6)) |>
   select(area_code=lsoa21cd, area_sqkm)
 small_areas_england_wales <- lsoa_populations_england_and_wales |>
   left_join(lsoa_ruc_england_wales, by="area_code") |>
@@ -142,8 +269,18 @@ small_areas_england_wales <- lsoa_populations_england_and_wales |>
   select(-geometry)
 small_areas_england_wales_centroids <- read_sf(CENTROIDS_ENGLAND_WALES_LSOAS) |>
   clean_names() |>
+  st_transform(BRITISH_NATIONAL_GRID_CRS) |>
   select(area_code=lsoa21cd) |>
+  st_join(regions_shapes) |>
+  mutate(
+    region=ifelse(is.na(region), "Wales", region),
+    region=ifelse(region=="Yorkshire and The Humber", "Yorks & Humber", region),
+    country=ifelse(region=="Wales", "Wales", "England")
+  ) |>
   left_join(small_areas_england_wales, by="area_code")
+small_areas_england_wales <- small_areas_england_wales_centroids |>
+  as_tibble() |>
+  select(-geometry)
 small_areas_england_wales_shapes <- lsoas_2021_sf |>
   select(area_code) |>
   left_join(small_areas_england_wales, by="area_code")
@@ -185,14 +322,18 @@ These classifications describe areas according to data from 2022
 
 ```{r urban-rural-scotland, include=FALSE}
 ruc_ordering_scotland <- c(
+  "Urban",
   "Large Urban Areas",
   "Other Urban Areas",
+  "Small Towns",
   "Accessible Small Towns",
   "Remote Small Towns",
   "Very Remote Small Towns",
+  "Rural",
   "Accessible Rural",
   "Remote Rural",
-  "Very Remote Rural"
+  "Very Remote Rural",
+  "All"
 )
 datazone_populations_scotland <- read_sf(CENTROIDS_SCOTLAND_DATAZONES) |>
   clean_names() |>
@@ -247,11 +388,15 @@ datazone_ruc_scotland <- read_csv(RUC_SCOTLAND_CSV) |>
 datazones_2022_sf <- read_sf(SHAPES_SCOTLAND_DATAZONES) |>
   clean_names() |>
   st_transform(BRITISH_NATIONAL_GRID_CRS) |>
-  mutate(area_sqkm=st_area(geometry) / 1e6) |>
+  mutate(area_sqkm=round(as.numeric(st_area(geometry)) / 1e6)) |>
   select(area_code=dz_code, area_sqkm)
 small_areas_scotland <- datazone_populations_scotland |>
   left_join(datazone_ruc_scotland, by="area_code") |>
   left_join(datazones_2022_sf, by="area_code") |>
+  mutate(
+    region="Scotland",
+    country="Scotland"
+  ) |>
   select(-geometry)
 small_areas_scotland_centroids <- read_sf(CENTROIDS_SCOTLAND_DATAZONES) |>
   clean_names() |>
@@ -300,22 +445,21 @@ Northern Irish settlements are classified in bands from A (population) to H (pop
 
 ```{r urban-rural-northern-ireland, include=FALSE}
 ruc_ordering_northern_ireland <- c(
+  "Urban",
   "Urban, Accessible",
   "Urban, Remote",
+  "Mixed urban/rural",
   "Mixed urban/rural, Accessible",
   "Mixed urban/rural, Remote",
+  "Rural",
   "Rural, Accessible",
-  "Rural, Remote"
-)
-ruc_ordering_northern_ireland_3_fold <- c(
-  "Urban",
-  "Mixed urban/rural",
-  "Rural"
+  "Rural, Remote",
+  "All"
 )
 soa_shapes_northern_ireland <- read_sf(SHAPES_NORTHERN_IRELAND_SOAS) |>
   clean_names() |>
   st_transform(BRITISH_NATIONAL_GRID_CRS) |>
-  mutate(area_sqkm=st_area(geometry) / 1e6) |>
+  mutate(area_sqkm=round(as.numeric(st_area(geometry)) / 1e6)) |>
   select(soa_code, area_sqkm)
 datazone_to_soa_2011_map <- read_csv(CENTROIDS_NORTHERN_IRELAND_DATAZONES) |>
   clean_names() |>
@@ -387,6 +531,8 @@ soa_composite_uk_ruc_northern_ireland <- read_csv(ALLOCATIONS_NORTHERN_IRELAND_C
 small_areas_northern_ireland <- soa_ruc_northern_ireland |>
   left_join(soa_composite_uk_ruc_northern_ireland, by="area_code") |>
   mutate(
+    region="Northern Ireland",
+    country="Northern Ireland",
     ruc_composite_6_fold=case_when(
       ruc_composite_3_fold == "Urban" & accessible_or_remote == "Accessible" ~ "Urban, Accessible",
       ruc_composite_3_fold == "Urban" & accessible_or_remote == "Remote" ~ "Urban, Remote",
@@ -400,7 +546,8 @@ small_areas_northern_ireland <- soa_ruc_northern_ireland |>
   filter(!is.na(population), !is.na(area_sqkm))
 small_areas_northern_ireland_shapes <- soa_shapes_northern_ireland |>
   select(area_code="soa_code") |>
-  left_join(small_areas_northern_ireland, by="area_code")
+  left_join(small_areas_northern_ireland, by="area_code") |>
+  filter(!is.na(population), !is.na(area_sqkm))
 
 rural_urban_summary_northern_ireland <- small_areas_northern_ireland |>
   group_by(rural_urban_class_northern_ireland) |>
@@ -451,67 +598,26 @@ Following the MySociety approach to building composite UK-wide rural-urban class
 The term "quite rural" is used in this 3-fold system instead of MySociety's "rural" in order to keep it distinct from the broader "rural" class within the 2-fold system.
 
 ```{r urban-rural-uk-composite}
-ruc_ordering_uk_6_fold <- c(
+ruc_ordering_uk <- c(
+  "Urban",
   "Urban, Accessible",
   "Urban, Remote",
+  "Rural",
+  "Quite Rural",
   "Quite Rural, Accessible",
   "Quite Rural, Remote",
+  "Very Rural",
   "Very Rural, Accessible",
-  "Very Rural, Remote"
+  "Very Rural, Remote",
+  "All"
 )
-ruc_ordering_uk_3_fold <- c(
-  "Urban",
-  "Quite Rural",
-  "Very Rural"
-)
-ruc_ordering_uk_2_fold <- c(
-  "Urban",
-  "Rural"
-)
-small_areas_uk <- rbind(
-  small_areas_england_wales |>
-    select(
-      area_code,
-      area_name,
-      population,
-      area_sqkm,
-      ruc_composite_6_fold,
-      ruc_composite_3_fold,
-      ruc_composite_2_fold
-    ),
-  small_areas_scotland |>
-    select(
-      area_code,
-      area_name,
-      population,
-      area_sqkm,
-      ruc_composite_6_fold,
-      ruc_composite_3_fold,
-      ruc_composite_2_fold
-    )
-) |>
-  rbind(
-    small_areas_northern_ireland |>
-      select(
-        area_code,
-        area_name,
-        population,
-        area_sqkm,
-        ruc_composite_6_fold,
-        ruc_composite_3_fold,
-        ruc_composite_2_fold
-      )
-  ) |>
-  mutate(
-    ruc_composite_6_fold=factor(ruc_composite_6_fold, levels=ruc_ordering_uk_6_fold),
-    ruc_composite_3_fold=factor(ruc_composite_3_fold, levels=ruc_ordering_uk_3_fold),
-    ruc_composite_2_fold=factor(ruc_composite_2_fold, levels=ruc_ordering_uk_2_fold)
-  )
 small_areas_uk_shapes <- rbind(
   small_areas_england_wales_shapes |>
     select(
       area_code,
       area_name,
+      region,
+      country,
       population,
       area_sqkm,
       ruc_composite_6_fold,
@@ -522,6 +628,8 @@ small_areas_uk_shapes <- rbind(
     select(
       area_code,
       area_name,
+      region,
+      country,
       population,
       area_sqkm,
       ruc_composite_6_fold,
@@ -534,6 +642,8 @@ small_areas_uk_shapes <- rbind(
       select(
         area_code,
         area_name,
+        region,
+        country,
         population,
         area_sqkm,
         ruc_composite_6_fold,
@@ -542,11 +652,14 @@ small_areas_uk_shapes <- rbind(
       )
   ) |>
   mutate(
-    ruc_composite_6_fold=factor(ruc_composite_6_fold, levels=ruc_ordering_uk_6_fold),
-    ruc_composite_3_fold=factor(ruc_composite_3_fold, levels=ruc_ordering_uk_3_fold),
-    ruc_composite_2_fold=factor(ruc_composite_2_fold, levels=ruc_ordering_uk_2_fold)
+    ruc_composite_6_fold=factor(ruc_composite_6_fold, levels=ruc_ordering_uk),
+    ruc_composite_3_fold=factor(ruc_composite_3_fold, levels=ruc_ordering_uk),
+    ruc_composite_2_fold=factor(ruc_composite_2_fold, levels=ruc_ordering_uk)
   )
-
+small_areas_uk <- small_areas_uk_shapes |>
+  as_tibble() |>
+  select(-geometry)
+  
 rural_urban_summary_uk_6_fold <- small_areas_uk |>
   group_by(ruc_composite_6_fold) |>
   summarize(
@@ -611,7 +724,8 @@ spatial_signature_ordering <- c(
   "Open sprawl",
   "Urban buffer",
   "Countryside agriculture",
-  "Wild countryside"
+  "Wild countryside",
+  "All"
 )
 
 spatial_signatures_sf <- read_sf(SHAPES_SPATIAL_SIGNATURES) |>
@@ -619,7 +733,7 @@ spatial_signatures_sf <- read_sf(SHAPES_SPATIAL_SIGNATURES) |>
   st_transform(BRITISH_NATIONAL_GRID_CRS) |>
   mutate(
     spatial_signature_type = type,
-    area_sqkm=st_area(geometry) / 1e6
+    area_sqkm=round(as.numeric(st_area(geometry)) / 1e6)
   )
 small_areas_gb_spatial_signatures <- rbind(
   small_areas_england_wales_centroids |> select(area_code, population, ruc_composite_6_fold, ruc_composite_3_fold, ruc_composite_2_fold),
@@ -670,7 +784,7 @@ There is clear correlation between rural/urban classifications and spatial signa
 ggplot(
   ruc_6_vs_spatial_signature,
   aes(
-    x=fct_rev(factor(ruc_composite_6_fold, ruc_ordering_uk_6_fold)),
+    x=fct_rev(factor(ruc_composite_6_fold, ruc_ordering_uk)),
     y=fct_rev(factor(spatial_signature_type, spatial_signature_ordering)),
     fill=count
   )
@@ -694,6 +808,7 @@ ggplot(
 
 ```{r load-museums-data, include=FALSE}
 museums <- load_museums_data(MAPPING_MUSEUMS_CSV) |>
+  #filter(subject_broad != "Buildings") |>
   st_as_sf(coords=c("longitude", "latitude"), crs=WGS_84_CRS) |>
   st_transform(BRITISH_NATIONAL_GRID_CRS) |>
   st_join(
@@ -719,7 +834,13 @@ museums <- load_museums_data(MAPPING_MUSEUMS_CSV) |>
   ) |>
   st_join(
     small_areas_uk_shapes |>
-      select(ruc_composite_6_fold, ruc_composite_3_fold, ruc_composite_2_fold)
+      select(
+        region,
+        country,
+        ruc_composite_6_fold,
+        ruc_composite_3_fold,
+        ruc_composite_2_fold
+      )
   ) |>
   st_join(
     spatial_signatures_sf |>
@@ -734,7 +855,7 @@ make_museums_by_area_type_table <- function(museums_table, area_classification, 
     group_by(.data[[area_classification]]) |>
     summarize(total_museums=n()) |>
     ungroup() |>
-    mutate(museums_percentage=round(total_museums / sum(total_museums) * 100, 1)) |>
+    mutate(museums_percentage=round(total_museums / sum(total_museums) * 100, 2)) |>
     full_join(area_types_table, by=area_classification) |>
     mutate(
       across(everything(), ~replace_na(.x, 0)),
@@ -751,6 +872,7 @@ make_museums_by_area_type_table <- function(museums_table, area_classification, 
       `Population (millions)`=population_millions,
       `Population (%)`=population_percentage,
       `Area (sqkm)`=total_area_sqkm,
+      `Area (%)`=area_percentage,
       `Museums (N)`=total_museums,
       `Museums (%)`=museums_percentage,
       `Museums (per 100k residents)`=museums_per_100k_people,
@@ -790,6 +912,7 @@ make_museums_total_table <- function(museums_table, area_classification, area_ty
       `Population (millions)`=population_millions,
       `Population (%)`=population_percentage,
       `Area (sqkm)`=total_area_sqkm,
+      `Area (%)`=area_percentage,
       `Museums (N)`=total_museums,
       `Museums (%)`=museums_percentage,
       `Museums (per 100k residents)`=museums_per_100k_people,
@@ -808,12 +931,15 @@ rural_urban_england_wales_table <- make_museums_by_area_type_table(
 rural_urban_3_fold_england_wales_table <- make_museums_by_area_type_table(
   museums, "rural_urban_class_england_wales_3_fold", rural_urban_3_fold_summary_england_wales
 )
+datatable(rural_urban_3_fold_england_wales_table)
 total_table_england_wales <- make_museums_total_table(
   museums, "rural_urban_class_england_wales", rural_urban_summary_england_wales
 )
 england_wales_museums_table <- rural_urban_england_wales_table |>
   rbind(rural_urban_3_fold_england_wales_table) |>
-  rbind(total_table_england_wales)
+  rbind(total_table_england_wales) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_england_wales)) |>
+  arrange(`Rural/Urban Class`)
 datatable(england_wales_museums_table)
 ```
 
@@ -830,7 +956,9 @@ total_table_scotland <- make_museums_total_table(
 )
 scotland_museums_table <- rural_urban_scotland_table |>
   rbind(rural_urban_3_fold_scotland_table) |>
-  rbind(total_table_scotland)
+  rbind(total_table_scotland) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_scotland)) |>
+  arrange(`Rural/Urban Class`)
 datatable(scotland_museums_table)
 ```
 
@@ -847,7 +975,9 @@ total_table_northern_ireland <- make_museums_total_table(
 )
 northern_ireland_museums_table <- rural_urban_northern_ireland_table |>
   rbind(rural_urban_3_fold_northern_ireland_table) |>
-  rbind(total_table_northern_ireland)
+  rbind(total_table_northern_ireland) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_northern_ireland)) |>
+  arrange(`Rural/Urban Class`)
 datatable(northern_ireland_museums_table)
 ```
 
@@ -859,14 +989,36 @@ rural_urban_uk_table <- make_museums_by_area_type_table(
 rural_urban_3_fold_uk_table <- make_museums_by_area_type_table(
   museums, "ruc_composite_3_fold", rural_urban_summary_uk_3_fold
 )
+rural_urban_2_fold_uk_table <- make_museums_by_area_type_table(
+  museums, "ruc_composite_2_fold", rural_urban_summary_uk_2_fold
+)
 total_table_uk <- make_museums_total_table(
   museums, "ruc_composite_3_fold", rural_urban_summary_uk_3_fold
 )
 uk_museums_table <- rural_urban_uk_table |>
   rbind(rural_urban_3_fold_uk_table) |>
-  rbind(total_table_uk)
+  rbind(total_table_uk) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_uk)) |>
+  arrange(`Rural/Urban Class`)
 datatable(uk_museums_table)
 ```
+
+```{r museums-uk-3-fold-table}
+uk_3_fold_museums_table <- rural_urban_3_fold_uk_table |>
+  rbind(total_table_uk) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_uk)) |>
+  arrange(`Rural/Urban Class`)
+datatable(uk_3_fold_museums_table)
+```
+
+```{r museums-uk-2-fold-table}
+uk_2_fold_museums_table <- rural_urban_2_fold_uk_table |>
+  rbind(total_table_uk) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_uk)) |>
+  arrange(`Rural/Urban Class`)
+datatable(uk_2_fold_museums_table)
+```
+
 
 ### Museums across the Spatial Signatures
 ```{r museums-spatial-signatures-table}
@@ -878,6 +1030,857 @@ total_table_spatial_signatures <- make_museums_total_table(
 )
 spatial_signatures_museums_table <- rural_urban_spatial_signatures_table |>
   rbind(total_table_spatial_signatures) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, spatial_signature_ordering)) |>
+  arrange(`Rural/Urban Class`) |>
   rename(`Spatial Signature Type`=`Rural/Urban Class`)
 datatable(spatial_signatures_museums_table)
+```
+
+## Museums by Region
+```{r, warning=FALSE, echo=FALSE, include=FALSE}
+rural_urban_2_fold_by_region <- small_areas_uk |>
+  filter(!is.na(region)) |>
+  group_by(region, ruc_composite_2_fold) |>
+  summarize(
+    total_population = sum(population),
+    total_area_sqkm = sum(area_sqkm),
+    population_millions = round(total_population / 1e6, 2),
+    area_hundreds = round(total_area_sqkm / 10000, 0),
+  ) |>
+  ungroup() |>
+  arrange(fct_rev(factor(ruc_composite_2_fold, ruc_ordering_uk))) |>
+  group_by(region) |>
+  mutate(
+    population_percentage = round(total_population / sum(total_population) * 100, 1),
+    area_percentage = round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  )
+rural_urban_2_fold_by_country <- small_areas_uk |>
+  filter(!is.na(country)) |>
+  group_by(country, ruc_composite_2_fold) |>
+  summarize(
+    total_population = sum(population),
+    total_area_sqkm = sum(area_sqkm),
+    population_millions = round(total_population / 1e6, 2),
+    area_hundreds = round(total_area_sqkm / 10000, 0),
+  ) |>
+  ungroup() |>
+  arrange(fct_rev(factor(ruc_composite_2_fold, ruc_ordering_uk))) |>
+  group_by(country) |>
+  mutate(
+    population_percentage = round(total_population / sum(total_population) * 100, 1),
+    area_percentage = round(total_area_sqkm / sum(total_area_sqkm) * 100, 1)
+  )
+```
+
+```{r museums-uk-2-fold-by-region-table}
+make_museums_by_area_type_and_attribute_table <- function(museums_table, area_classification, attribute, area_types_table) {
+  museums_table |>
+    filter(!is.na(.data[[area_classification]])) |>
+    group_by(.data[[area_classification]], .data[[attribute]]) |>
+    summarize(total_museums=n()) |>
+    ungroup() |>
+    group_by(.data[[attribute]]) |>
+    mutate(museums_percentage=round(total_museums / sum(total_museums) * 100, 1)) |>
+    ungroup() |>
+    full_join(area_types_table, by=c(area_classification, attribute)) |>
+    mutate(
+      across(everything(), ~replace_na(.x, 0)),
+      population_millions = round(total_population / 1e6, 2),
+      museums_per_100k_people = total_museums / total_population * 1e5,
+      museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+      z_score_per_100k_people = round(scale(museums_per_100k_people, center=TRUE, scale=TRUE), 2),
+      z_score_per_100sqkm = round(scale(museums_per_100sqkm, center=TRUE, scale=TRUE), 2),
+      museums_per_100k_people = round(museums_per_100k_people, 2),
+      museums_per_100sqkm = round(museums_per_100sqkm, 2)
+    ) |>
+    select(
+      `Country/Region`=.data[[attribute]],
+      `Rural/Urban Class`=.data[[area_classification]],
+      `Population (millions)`=population_millions,
+      `Population (%)`=population_percentage,
+      `Area (sqkm)`=total_area_sqkm,
+      `Area (%)`=area_percentage,
+      `Museums (N)`=total_museums,
+      `Museums (%)`=museums_percentage,
+      `Museums (per 100k residents)`=museums_per_100k_people,
+      `Z-score (per 100k residents)`=z_score_per_100k_people,
+      `Museums (per 100 sqkm)`=museums_per_100sqkm,
+      `Z-score (per 100 sqkm)`=z_score_per_100sqkm
+    )  |>
+    pivot_wider(
+      names_from = `Rural/Urban Class`,
+      values_from = c(
+        `Population (millions)`,
+        `Population (%)`,
+        `Area (sqkm)`,
+        `Area (%)`,
+        `Museums (N)`,
+        `Museums (%)`,
+        `Museums (per 100k residents)`,
+        `Z-score (per 100k residents)`,
+        `Museums (per 100 sqkm)`,
+        `Z-score (per 100 sqkm)`
+      ),
+      names_glue = "{`Rural/Urban Class`} {.value}"
+    ) |>
+    relocate(`Country/Region`, starts_with("Urban"), starts_with("Rural")) |>
+    mutate(`Country/Region`=factor(`Country/Region`, country_region_ordering))
+}
+
+uk_2_fold_museums_by_country_table <- make_museums_by_area_type_and_attribute_table(
+  museums, "ruc_composite_2_fold", "country", rural_urban_2_fold_by_country
+)
+uk_2_fold_museums_by_region_table <- make_museums_by_area_type_and_attribute_table(
+  museums, "ruc_composite_2_fold", "region", rural_urban_2_fold_by_region
+) |>
+  filter(!`Country/Region` %in% c("Northern Ireland", "Wales", "Scotland"))
+uk_2_fold_museums_all_uk_table <- uk_2_fold_museums_table |>
+  mutate(`Country/Region`="United Kingdom") |>
+  filter(`Rural/Urban Class` != "All") |>
+  pivot_wider(
+    names_from = `Rural/Urban Class`,
+    values_from = c(
+      `Population (millions)`,
+      `Population (%)`,
+      `Area (sqkm)`,
+      `Area (%)`,
+      `Museums (N)`,
+      `Museums (%)`,
+      `Museums (per 100k residents)`,
+      `Z-score (per 100k residents)`,
+      `Museums (per 100 sqkm)`,
+      `Z-score (per 100 sqkm)`
+    ),
+    names_glue = "{`Rural/Urban Class`} {.value}"
+  ) |>
+  relocate(`Country/Region`, starts_with("Urban"), starts_with("Rural")) |>
+  mutate(`Country/Region`=factor(`Country/Region`, country_region_ordering))
+  
+uk_2_fold_museums_by_country_region_table <- rbind(
+  uk_2_fold_museums_by_country_table,
+  uk_2_fold_museums_by_region_table
+) |>
+  rbind(uk_2_fold_museums_all_uk_table) |>
+  arrange(`Country/Region`)
+datatable(uk_2_fold_museums_by_country_region_table)
+```
+
+#### Figures for only houses (large, medium, or small)
+
+```{r houses-uk-2-fold-by-region-table}
+rural_urban_2_fold_uk_houses_table <- make_museums_by_area_type_table(
+  museums |>
+    filter(
+      subject_specific %in% c(
+        "Buildings-Houses-Large_houses",
+        "Buildings-Houses-Medium_houses",
+        "Buildings-Houses-Small_houses"
+      )
+    ),
+  "ruc_composite_2_fold",
+  rural_urban_summary_uk_2_fold
+)
+uk_2_fold_houses_table <- rural_urban_2_fold_uk_houses_table |>
+  rbind(total_table_uk) |>
+  mutate(`Rural/Urban Class`=factor(`Rural/Urban Class`, ruc_ordering_uk)) |>
+  arrange(`Rural/Urban Class`)
+uk_2_fold_houses_by_country_table <- make_museums_by_area_type_and_attribute_table(
+  museums |>
+    filter(
+      subject_specific %in% c(
+        "Buildings-Houses-Large_houses",
+        "Buildings-Houses-Medium_houses",
+        "Buildings-Houses-Small_houses"
+      )
+    ),
+  "ruc_composite_2_fold", "country",
+  rural_urban_2_fold_by_country
+)
+uk_2_fold_houses_by_region_table <- make_museums_by_area_type_and_attribute_table(
+  museums |>
+    filter(
+      subject_specific %in% c(
+        "Buildings-Houses-Large_houses",
+        "Buildings-Houses-Medium_houses",
+        "Buildings-Houses-Small_houses"
+      )
+    ),
+  "ruc_composite_2_fold",
+  "region",
+  rural_urban_2_fold_by_region
+) |>
+  filter(!`Country/Region` %in% c("Northern Ireland", "Wales", "Scotland"))
+uk_2_fold_houses_all_uk_table <- uk_2_fold_houses_table |>
+  mutate(`Country/Region`="United Kingdom") |>
+  filter(`Rural/Urban Class` != "All") |>
+  pivot_wider(
+    names_from = `Rural/Urban Class`,
+    values_from = c(
+      `Population (millions)`,
+      `Population (%)`,
+      `Area (sqkm)`,
+      `Area (%)`,
+      `Museums (N)`,
+      `Museums (%)`,
+      `Museums (per 100k residents)`,
+      `Z-score (per 100k residents)`,
+      `Museums (per 100 sqkm)`,
+      `Z-score (per 100 sqkm)`
+    ),
+    names_glue = "{`Rural/Urban Class`} {.value}"
+  ) |>
+  relocate(`Country/Region`, starts_with("Urban"), starts_with("Rural")) |>
+  mutate(`Country/Region`=factor(`Country/Region`, country_region_ordering))
+  
+uk_2_fold_houses_by_country_region_table <- rbind(
+  uk_2_fold_houses_by_country_table,
+  uk_2_fold_houses_by_region_table
+) |>
+  rbind(uk_2_fold_houses_all_uk_table) |>
+  arrange(`Country/Region`)
+datatable(uk_2_fold_houses_by_country_region_table)
+```
+
+
+```{r save-tables}
+write.xlsx(
+  list(
+    "UK-6-fold"=uk_museums_table,
+    "UK-3-fold"=uk_3_fold_museums_table,
+    "UK-2-fold"=uk_2_fold_museums_table,
+    "UK-2-fold by Region"=uk_2_fold_museums_by_country_region_table,
+    "England and Wales"=england_wales_museums_table,
+    "Scotland"=scotland_museums_table,
+    "Northern Ireland"=northern_ireland_museums_table,
+    "Spatial Signatures"=spatial_signatures_museums_table
+  ),
+  file="data/urban-rural-museums.xlsx"
+)
+
+write.xlsx(
+  list(
+    "All museums"=museums |>
+      select(
+        -rural_urban_class_england_wales_3_fold,
+        -rural_urban_class_scotland_3_fold,
+        -rural_urban_class_northern_ireland_3_fold
+      )
+  ),
+  file="data/all-museums.xlsx"
+)
+```
+
+```{r, warning=FALSE, echo=FALSE, include=FALSE}
+rural_urban_by_region <- small_areas_uk |>
+  filter(!is.na(region)) |>
+  group_by(region, ruc_composite_3_fold) |>
+  summarize(
+    total_population = sum(population),
+    total_area = sum(area_sqkm),
+    population_millions = round(total_population / 1e6, 2),
+    area_hundreds = round(total_area / 10000, 0),
+  ) |>
+  ungroup() |>
+  arrange(fct_rev(factor(ruc_composite_3_fold, ruc_ordering_uk))) |>
+  group_by(region) |>
+  mutate(
+    population_pc = round(total_population / sum(total_population) * 100, 1),
+    area_pc = round(total_area / sum(total_area) * 100, 1),
+    pop_cumulative_total = cumsum(population_millions),
+    pop_category_total = sum(population_millions),
+    pop_max = max(population_millions),
+    pop_label_bar = population_millions > 0.4,
+    pop_label_position = ifelse(
+      pop_label_bar,
+      pop_cumulative_total - 0.5 * population_millions,
+      NA
+    ),
+    area_cumulative_total = cumsum(area_hundreds),
+    area_category_total = sum(area_hundreds),
+    area_max = max(area_hundreds),
+    area_label_bar = area_hundreds > 30 & ruc_composite_3_fold != "Quite Rural",
+    area_label_position = ifelse(
+      area_label_bar,
+      area_cumulative_total - 0.5 * area_hundreds,
+      NA
+    )
+  )
+```
+
+```{r, warning=FALSE, echo=FALSE, include=FALSE}
+region_populations_by_rural_urban <- rural_urban_by_region |>
+  mutate(
+    count = population_millions,
+    percentage = population_pc,
+    thing = "population"
+  ) |>
+  select(region, thing, ruc_composite_3_fold, count, percentage)
+
+region_museums_by_rural_urban <- museums |>
+  filter(!is.na(ruc_composite_3_fold)) |>
+  group_by(ruc_composite_3_fold, region) |>
+  summarize(
+    count = n()
+  ) |>
+  ungroup() |>
+  group_by(region) |>
+  mutate(
+    percentage = round(count / sum(count) * 100, 1),
+    thing = "museums"
+  ) |>
+  select(region, thing, ruc_composite_3_fold, count, percentage)
+
+region_pop_and_museums_by_rural_urban <- rbind(
+  region_populations_by_rural_urban,
+  region_museums_by_rural_urban,
+  region_museums_by_rural_urban |>
+    mutate(thing="gap", count=0, percentage=0)
+) |>
+  arrange(factor(ruc_composite_3_fold, ruc_ordering_uk)) |>
+  group_by(region, thing) |>
+  mutate(
+    label_position = ifelse(percentage > 7.5, cumsum(percentage) - percentage, NA)
+  ) |>
+  ungroup() |>
+  group_by(region, ruc_composite_3_fold) |>
+  mutate(
+    difference = round(-1 * (sum(percentage) - percentage * 2), 1),
+    difference = ifelse(
+      difference >= 0,
+      paste0("+", difference, "%"),
+      paste0(difference, "%")
+    )
+  ) |>
+  ungroup()
+
+region_pop_and_museums_totals <- region_pop_and_museums_by_rural_urban |>
+  filter(thing != "gap") |>
+  group_by(region, thing) |>
+  summarize(
+    total_count = round(sum(count), 1)
+  )
+```
+
+```{r museums-and-population-by-region, echo=FALSE, fig.width=10, fig.height=8}
+region_urban_rural_ordering <- c(
+  "London",
+  "North West",
+  "Yorks & Humber",
+  "West Midlands",
+  "South East",
+  "North East",
+  "Northern Ireland",
+  "East of England",
+  "East Midlands",
+  "South West",
+  "Scotland",
+  "Wales"
+)
+
+urban_rural_pop_and_museums_by_region <- ggplot(
+  data=region_pop_and_museums_by_rural_urban,
+  aes(
+    x=percentage,
+    y=interaction(factor(thing, c("museums", "population", "gap")), fct_rev(factor(region, region_urban_rural_ordering)))
+  )
+) +
+  geom_bar(
+    aes(alpha=thing, fill = fct_rev(factor(ruc_composite_3_fold, ruc_ordering_uk))),
+    stat="identity",
+    position="stack"
+  ) +
+  geom_text(
+    data=region_pop_and_museums_by_rural_urban |> filter(thing=="population" & !is.na(label_position)),
+    aes(x=label_position, label=paste0(percentage, "%")), hjust="left",
+    size=3
+  ) +
+  geom_text(
+    data=region_pop_and_museums_by_rural_urban |> filter(thing=="museums" & !is.na(label_position)),
+    aes(x=label_position, label=paste0(percentage, "% (", difference, ")")), hjust="left",
+    size=3
+  ) +
+  geom_text(
+    data=region_pop_and_museums_totals,
+    aes(label=ifelse(thing=="population", paste(total_count, "million"), total_count)),
+    x=101,
+    hjust="left"
+  ) +
+  annotate(
+    geom="text",
+    label="Total",
+    y=36,
+    x=101,
+    hjust="left",
+    vjust="bottom",
+    size=4
+  ) +
+  scale_y_discrete(
+    labels = function(breaks) {
+      sapply(breaks, function(b) {
+        parts <- strsplit(b, ".", fixed = TRUE)[[1]]
+        if (parts[1] == "population") {
+          return(paste0(parts[2], ": pop."))
+        } else if (parts[1] == "museums") {
+          return("museums")
+        } else {
+          return("")
+        }
+      })
+    }
+  ) +
+  scale_x_continuous(expand=c(0,0), limits=c(0, 111)) +
+  scale_fill_manual(values=c("Urban"="#C383E6", "Quite Rural"="#A0F7BE", "Very Rural"="#6BD48F")) +
+  scale_alpha_manual(values=c("museums"=1.0, "population"=0.5)) +
+  guides(fill=guide_legend(reverse=TRUE, direction = "horizontal"), alpha="none") +
+  labs(
+    title = "       Population and Museums along the Urban-Rural Spectrum \n            in the Countries and Regions of the United Kingdom",
+    x = "Percentage",
+    y = "Country / Region",
+    fill = "Area Type: "
+  ) +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill="white", colour="white"),
+    plot.title = element_text(size=16),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    axis.title = element_text(size=14),
+    axis.text = element_text(size=12),
+    legend.title = element_text(size=14),
+    legend.text = element_text(size=12),
+    legend.position = "top"
+  )
+
+ggsave(
+  file="figures/urban_rural_pop_and_museums_by_region.png",
+  plot=urban_rural_pop_and_museums_by_region,
+  width=10,
+  height=8
+)
+
+urban_rural_pop_and_museums_by_region
+```
+
+## Museum Types in Urban and Rural Areas
+
+```{r subject-tables, warning=FALSE, echo=FALSE}
+uk_rural_urban_subject_full_table <- museums |>
+  filter(!is.na(ruc_composite_3_fold)) |>
+  group_by(ruc_composite_3_fold, subject_specific) |>
+  summarize(
+    total_museums=n()
+  ) |>
+  ungroup() |>
+  group_by(subject_specific) |>
+  mutate(museums_percentage=round(total_museums / sum(total_museums) * 100)) |>
+  ungroup() |>
+  full_join(rural_urban_summary_uk_3_fold, by="ruc_composite_3_fold") |>
+  mutate(
+    across(everything(), ~replace_na(.x, 0)),
+    population_millions = round(total_population / 1e6, 2),
+    museums_per_100k_people = total_museums / total_population * 1e5,
+    museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+    z_score_per_100k_people = round(scale(museums_per_100k_people, center=TRUE, scale=TRUE), 2),
+    z_score_per_100sqkm = round(scale(museums_per_100sqkm, center=TRUE, scale=TRUE), 2),
+    museums_per_100k_people = round(museums_per_100k_people, 2),
+    museums_per_100sqkm = round(museums_per_100sqkm, 2)
+  )
+datatable(uk_rural_urban_subject_full_table)
+uk_rural_urban_subject_table <- museums |>
+  filter(!is.na(ruc_composite_3_fold)) |>
+  group_by(ruc_composite_3_fold, subject_broad) |>
+  summarize(
+    total_museums=n()
+  ) |>
+  ungroup() |>
+  group_by(subject_broad) |>
+  mutate(museums_percentage=round(total_museums / sum(total_museums) * 100)) |>
+  ungroup() |>
+  full_join(rural_urban_summary_uk_3_fold, by="ruc_composite_3_fold") |>
+  mutate(
+    across(everything(), ~replace_na(.x, 0)),
+    population_millions = round(total_population / 1e6, 2),
+    museums_per_100k_people = total_museums / total_population * 1e5,
+    museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+    z_score_per_100k_people = round(scale(museums_per_100k_people, center=TRUE, scale=TRUE), 2),
+    z_score_per_100sqkm = round(scale(museums_per_100sqkm, center=TRUE, scale=TRUE), 2),
+    museums_per_100k_people = round(museums_per_100k_people, 2),
+    museums_per_100sqkm = round(museums_per_100sqkm, 2)
+  )
+subject_ordering_table <- uk_rural_urban_subject_table |>
+  filter(ruc_composite_3_fold == "Urban") |>
+  select(subject_broad, museums_percentage) |>
+  arrange(desc(museums_percentage))
+subject_bars_table <- uk_rural_urban_subject_table |>
+  filter(ruc_composite_3_fold != "All" & subject_broad != "all") |>
+  arrange(
+    factor(subject_broad, c(subject_ordering_table$subject_broad, "all")), factor(ruc_composite_3_fold, ruc_ordering_uk)) |>
+  group_by(subject_broad) |>
+  mutate(
+    cumulative_total = cumsum(total_museums),
+    category_total = sum(total_museums),
+    max_total_museums = max(total_museums),
+    label_bar = category_total > 200 | total_museums > 20,
+    label_position = ifelse(
+      label_bar,
+      cumulative_total - 0.5 * total_museums,
+      ifelse(
+        total_museums == max_total_museums,
+        ifelse(
+          ruc_composite_3_fold == "Very Rural",
+          category_total + 75,
+          category_total + 45
+        ),
+        NA
+      )
+    )
+  ) |>
+  select(ruc_composite_3_fold, subject_broad, total_museums, museums_percentage, cumulative_total, label_bar, label_position)
+```
+
+```{r uk-wide-rural-urban-subject-bar, warning=FALSE, echo=FALSE, fig.align="center", fig.width = 10, fig.height = 6}
+uk_rural_urban_subject_bar_chart <- ggplot(
+  data = subject_bars_table,
+  aes(
+    y = fct_rev(factor(subject_broad, c(subject_ordering_table$subject_broad, "all"))),
+    x = total_museums, 
+    fill = fct_rev(factor(ruc_composite_3_fold, ruc_ordering_uk))
+  )
+) +
+  geom_bar(stat = "identity", position = "stack") +
+  geom_text(
+    data = subject_bars_table |> filter(label_bar),
+    aes(label=paste0(museums_percentage, "%"), x=label_position),
+    size=3
+  ) +
+  geom_text(
+    data = subject_bars_table |> filter(!label_bar & total_museums > 0),
+    aes(label=paste0(ruc_composite_3_fold, ": ", museums_percentage, "%"), x=label_position),
+    size=3,
+    label.size=NA,
+    show.legend=FALSE
+  ) +
+  scale_x_continuous(expand=c(0,0)) +
+  scale_y_discrete(expand=c(0,0), labels=subject_labels) +
+  scale_fill_manual(values=c("Urban"="#C383E6", "Quite Rural"="#A0F7BE", "Very Rural"="#6BD48F")) +
+  guides(fill=guide_legend(reverse=TRUE, direction = "horizontal")) +
+  labs(
+    title = "UK Museums Along the Urban-Rural Spectrum by Subject Matter",
+    legend = "Area Type",
+    x = "Number of Museums",
+    y = "Museum Subject Matter",
+    fill = "Museum Location"
+  ) +
+  uk_rural_urban_bars_theme +
+  theme(
+    legend.position="top"
+  )
+
+ggsave(
+    file="figures/uk-urban-rural-subject-bars.png",
+    plot=uk_rural_urban_subject_bar_chart,
+    width=10,
+    height=6
+  )
+
+uk_rural_urban_subject_bar_chart
+```
+
+```{r era-tables, warning=FALSE, echo=FALSE, include=FALSE}
+uk_rural_urban_era_table <- museums |>
+  filter(!is.na(ruc_composite_3_fold)) |>
+  group_by(ruc_composite_3_fold, era) |>
+  summarize(
+    total_museums=n()
+  ) |>
+  ungroup() |>
+  group_by(era) |>
+  mutate(museums_percentage=round(total_museums / sum(total_museums) * 100)) |>
+  ungroup() |>
+  full_join(rural_urban_summary_uk_3_fold, by="ruc_composite_3_fold") |>
+  mutate(
+    across(everything(), ~replace_na(.x, 0)),
+    population_millions = round(total_population / 1e6, 2),
+    museums_per_100k_people = total_museums / total_population * 1e5,
+    museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+    z_score_per_100k_people = round(scale(museums_per_100k_people, center=TRUE, scale=TRUE), 2),
+    z_score_per_100sqkm = round(scale(museums_per_100sqkm, center=TRUE, scale=TRUE), 2),
+    museums_per_100k_people = round(museums_per_100k_people, 2),
+    museums_per_100sqkm = round(museums_per_100sqkm, 2)
+  )
+era_bars_table <- uk_rural_urban_era_table |>
+  arrange(
+    factor(era, era_ordering), factor(ruc_composite_3_fold, ruc_ordering_uk)
+  ) |>
+  group_by(era) |>
+  mutate(
+    cumulative_total = cumsum(total_museums),
+    category_total = sum(total_museums),
+    max_total_museums = max(total_museums),
+    label_bar = category_total > 500 | total_museums > 50,
+    label_position = ifelse(
+      label_bar,
+      cumulative_total - 0.5 * total_museums,
+      ifelse(
+        total_museums == max_total_museums,
+        ifelse(
+          ruc_composite_3_fold == "Very Rural",
+          category_total + 75,
+          category_total + 45
+        ),
+        NA
+      )
+    )
+  ) |>
+  select(ruc_composite_3_fold, era, total_museums, museums_percentage, cumulative_total, label_bar, label_position)
+```
+
+```{r size-tables, warning=FALSE, echo=FALSE, include=FALSE}
+uk_rural_urban_size_table <- museums |>
+  filter(!is.na(ruc_composite_3_fold)) |>
+  group_by(ruc_composite_3_fold, size) |>
+  summarize(
+    total_museums=n()
+  ) |>
+  ungroup() |>
+  group_by(size) |>
+  mutate(museums_percentage=round(total_museums / sum(total_museums) * 100)) |>
+  ungroup() |>
+  full_join(rural_urban_summary_uk_3_fold, by="ruc_composite_3_fold") |>
+  mutate(
+    across(everything(), ~replace_na(.x, 0)),
+    population_millions = round(total_population / 1e6, 2),
+    museums_per_100k_people = total_museums / total_population * 1e5,
+    museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+    z_score_per_100k_people = round(scale(museums_per_100k_people, center=TRUE, scale=TRUE), 2),
+    z_score_per_100sqkm = round(scale(museums_per_100sqkm, center=TRUE, scale=TRUE), 2),
+    museums_per_100k_people = round(museums_per_100k_people, 2),
+    museums_per_100sqkm = round(museums_per_100sqkm, 2)
+  )
+size_bars_table <- uk_rural_urban_size_table |>
+  arrange(
+    factor(size, size_ordering), factor(ruc_composite_3_fold, ruc_ordering_uk)
+  ) |>
+  group_by(size) |>
+  mutate(
+    cumulative_total = cumsum(total_museums),
+    category_total = sum(total_museums),
+    max_total_museums = max(total_museums),
+    label_bar = category_total > 200 | total_museums > 50,
+    label_position = ifelse(
+      label_bar,
+      cumulative_total - 0.5 * total_museums,
+      ifelse(
+        total_museums == max_total_museums,
+        ifelse(
+          ruc_composite_3_fold == "Very Rural",
+          category_total + 100,
+          category_total + 100
+        ),
+        NA
+      )
+    )
+  ) |>
+  select(ruc_composite_3_fold, size, total_museums, museums_percentage, cumulative_total, label_bar, label_position)
+```
+
+```{r governance-tables, warning=FALSE, echo=FALSE, include=FALSE}
+uk_rural_urban_governance_table <- museums |>
+  filter(!is.na(ruc_composite_3_fold)) |>
+  group_by(ruc_composite_3_fold, governance_specific) |>
+  summarize(
+    total_museums=n()
+  ) |>
+  ungroup() |>
+  group_by(governance_specific) |>
+  mutate(museums_percentage=round(total_museums / sum(total_museums) * 100)) |>
+  ungroup() |>
+  full_join(rural_urban_summary_uk_3_fold, by="ruc_composite_3_fold") |>
+  mutate(
+    across(everything(), ~replace_na(.x, 0)),
+    population_millions = round(total_population / 1e6, 2),
+    museums_per_100k_people = total_museums / total_population * 1e5,
+    museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+    z_score_per_100k_people = round(scale(museums_per_100k_people, center=TRUE, scale=TRUE), 2),
+    z_score_per_100sqkm = round(scale(museums_per_100sqkm, center=TRUE, scale=TRUE), 2),
+    museums_per_100k_people = round(museums_per_100k_people, 2),
+    museums_per_100sqkm = round(museums_per_100sqkm, 2)
+  )
+governance_bars_table <- uk_rural_urban_governance_table |>
+  arrange(
+    factor(governance_specific, governance_ordering), factor(ruc_composite_3_fold, ruc_ordering_uk)
+  ) |>
+  group_by(governance_specific) |>
+  mutate(
+    cumulative_total = cumsum(total_museums),
+    category_total = sum(total_museums),
+    max_total_museums = max(total_museums),
+    label_bar = category_total > 200 | total_museums > 50,
+    label_position = ifelse(
+      label_bar,
+      cumulative_total - 0.5 * total_museums,
+      ifelse(
+        total_museums == max_total_museums,
+        ifelse(
+          ruc_composite_3_fold == "Very Rural",
+          category_total + 100,
+          category_total + 100
+        ),
+        NA
+      )
+    )
+  ) |>
+  select(ruc_composite_3_fold, governance_specific, total_museums, museums_percentage, cumulative_total, label_bar, label_position)
+```
+
+```{r governance-broad-tables, warning=FALSE, echo=FALSE}
+uk_rural_urban_governance_broad_table <- museums |>
+  filter(!is.na(ruc_composite_3_fold)) |>
+  group_by(ruc_composite_3_fold, governance_broad) |>
+  summarize(
+    total_museums=n()
+  ) |>
+  ungroup() |>
+  group_by(governance_broad) |>
+  mutate(museums_percentage=round(total_museums / sum(total_museums) * 100)) |>
+  ungroup() |>
+  full_join(rural_urban_summary_uk_3_fold, by="ruc_composite_3_fold") |>
+  mutate(
+    across(everything(), ~replace_na(.x, 0)),
+    population_millions = round(total_population / 1e6, 2),
+    museums_per_100k_people = total_museums / total_population * 1e5,
+    museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+    z_score_per_100k_people = round(scale(museums_per_100k_people, center=TRUE, scale=TRUE), 2),
+    z_score_per_100sqkm = round(scale(museums_per_100sqkm, center=TRUE, scale=TRUE), 2),
+    museums_per_100k_people = round(museums_per_100k_people, 2),
+    museums_per_100sqkm = round(museums_per_100sqkm, 2)
+  )
+datatable(uk_rural_urban_governance_broad_table)
+```
+
+```{r uk-wide-rural-urban-era-size-governance-bar, warning=FALSE, echo=FALSE, fig.align="center", fig.width = 10, fig.height = 6}
+era_size_governance_bars_table <- rbind(
+  era_bars_table |> rename(attribute=era),
+  size_bars_table |> rename(attribute=size)
+) |>
+  rbind(
+    governance_bars_table |> rename(attribute=governance_specific)
+  )
+
+uk_rural_urban_era_size_governance_bar_chart <- ggplot(
+  data = era_size_governance_bars_table,
+  aes(
+    y = fct_rev(factor(attribute, era_size_governance_ordering)),
+    x = total_museums, 
+    fill = fct_rev(factor(ruc_composite_3_fold, ruc_ordering_uk))
+  )
+) +
+  geom_hline(yintercept = 1.5, colour="grey") +
+  geom_hline(yintercept = 2.5, colour="grey") +
+  geom_hline(yintercept = 7.5, colour="grey") +
+  geom_hline(yintercept = 8.5, colour="grey") +
+  geom_hline(yintercept = 11.5, colour="black") +
+  geom_hline(yintercept = 16.5, colour="black") +
+  geom_bar(stat = "identity", position = "stack") +
+  geom_text(
+    data = era_size_governance_bars_table |> filter(label_bar),
+    aes(label=paste0(museums_percentage, "%"), x=label_position),
+    size=3
+  ) +
+  geom_text(
+    data = era_size_governance_bars_table |> filter(!label_bar & total_museums > 0),
+    aes(label=paste0(ruc_composite_3_fold, ": ", museums_percentage, "%"), x=label_position),
+    size=3,
+    label.size=NA,
+    show.legend=FALSE
+  ) +
+  scale_x_continuous(expand=c(0,0)) +
+  scale_y_discrete(expand=c(0,0), labels=era_size_governance_labels) +
+  scale_fill_manual(values=c("Urban"="#C383E6", "Quite Rural"="#A0F7BE", "Very Rural"="#6BD48F")) +
+  guides(fill=guide_legend(reverse=TRUE, direction = "horizontal")) +
+  labs(
+    title = "UK Museums Along the Urban-Rural Spectrum by Age, Size, and Governance",
+    legend = "Area Type",
+    x = "Number of Museums",
+    y = "Museum Governance        Size       Age",
+    fill = "Museum Location"
+  ) +
+  uk_rural_urban_bars_theme +
+  theme(
+    legend.position="top"
+  )
+
+ggsave(
+    file="figures/uk-urban-rural-era-size-governance-bars.png",
+    plot=uk_rural_urban_era_size_governance_bar_chart,
+    width=10,
+    height=6
+  )
+
+uk_rural_urban_era_size_governance_bar_chart
+```
+
+```{r uk-spatial-signature-vs-era-table, include=FALSE}
+uk_spatial_signature_era_table <- museums |>
+  filter(!is.na(spatial_signature_type)) |>
+  group_by(era, spatial_signature_type) |>
+  summarize(
+    total_museums=n()
+  ) |>
+  ungroup() |>
+  complete(era, spatial_signature_type, fill=list(total_museums=0)) |>
+  full_join(spatial_signatures_summary, by="spatial_signature_type") |>
+  mutate(
+    across(everything(), ~replace_na(.x, 0)),
+    population_millions = round(total_population / 1e6, 2),
+    museums_per_100k_people = total_museums / total_population * 1e5,
+    museums_per_100sqkm = total_museums / total_area_sqkm * 100,
+    z_score_per_100k_people = round(scale(museums_per_100k_people, center=TRUE, scale=TRUE), 2),
+    z_score_per_100sqkm = round(scale(museums_per_100sqkm, center=TRUE, scale=TRUE), 2),
+    museums_per_100k_people = round(museums_per_100k_people, 2),
+    museums_per_100sqkm = round(museums_per_100sqkm, 2)
+  )
+```
+
+```{r uk-spatial-signature-vs-era-area-chart, warning=FALSE, echo=FALSE, fig.align="center", fig.width = 10, fig.height = 10}
+lines_table <- uk_spatial_signature_era_table |>
+  filter(spatial_signature_type != "All" & era != "all") |>
+  arrange(factor(era, era_ordering), fct_rev(factor(spatial_signature_type, spatial_signature_ordering)))
+
+spatial_sig_per_capita_area_era <- ggplot(
+  data = lines_table |> arrange(spatial_signature_type, era),
+  aes(
+    fill = fct_rev(factor(era, era_ordering)),
+    y = museums_per_100k_people, 
+    x = factor(spatial_signature_type, spatial_signature_ordering),
+    group = fct_rev(factor(era, era_ordering))
+  )
+) +
+  geom_area(position="stack") +
+  scale_fill_manual(values=era_colours) +
+  guides(fill=guide_legend(reverse=TRUE, direction = "horizontal")) +
+  labs(
+    title = "Age of Museums in Urban and Rural Areas",
+    subtitle = "(Great Britain only)",
+    x = "Spatial Signature (more urban to more rural)",
+    y = "Museums per 100k residents",
+    fill = "Time of Museum Founding: "
+  ) +
+  uk_rural_urban_bars_theme +
+  theme(
+    legend.position = "top",
+    axis.text.x = element_text(angle=60, hjust=1),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(colour="grey")
+  )
+
+ggsave(
+  "figures/spatial_sig_per_capita_area_era.png",
+  spatial_sig_per_capita_area_era,
+  width=10,
+  height=10
+)
+
+spatial_sig_per_capita_area_era
 ```

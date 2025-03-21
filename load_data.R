@@ -72,6 +72,16 @@ load_museums_data <- function(csv_file_name) {
         region_country == "Channel Islands" ~ "Channel Islands",
         TRUE ~ "England"
       ),
+      region = case_when(
+        region_country == "Scotland" ~ "Scotland",
+        region_country == "Wales" ~ "Wales",
+        region_country == "Northern Ireland" ~ "Northern Ireland",
+        region_country == "Isle of Man" ~ "Isle of Man",
+        region_country == "Channel Islands" ~ "Channel Islands",
+        region_country == "Yorkshire and The Humber" ~ "Yorks & Humber",
+        region_country == "East" ~ "East of England",
+        TRUE ~ region_country
+      ),
       governance_broad = case_when(
         governance == "Government-National" ~ "National",
         governance == "Government-Local_Authority" ~ "Local_Authority",
@@ -115,8 +125,6 @@ load_museums_data <- function(csv_file_name) {
       governance_specific,
       subject_broad,
       subject_specific,
-      country,
-      region_country,
       village_town_city=village_town_or_city,
       latitude,
       longitude
