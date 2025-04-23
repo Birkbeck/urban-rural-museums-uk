@@ -1254,7 +1254,7 @@ write.xlsx(
     "Northern Ireland"=northern_ireland_museums_table,
     "Spatial Signatures"=spatial_signatures_museums_table
   ),
-  file="data/urban-rural-museums.xlsx"
+  file="stats/museums-urban-rural-stats.xlsx"
 )
 
 write.xlsx(
@@ -1266,7 +1266,7 @@ write.xlsx(
         -rural_urban_class_northern_ireland_3_fold
       )
   ),
-  file="data/all-museums.xlsx"
+  file="stats/museums-with-urban-rural-categories.xlsx"
 )
 ```
 
