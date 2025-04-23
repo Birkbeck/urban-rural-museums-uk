@@ -1036,6 +1036,90 @@ spatial_signatures_museums_table <- rural_urban_spatial_signatures_table |>
 datatable(spatial_signatures_museums_table)
 ```
 
+```{r museums-and-population-by-spatial-signature, echo=FALSE, fig.width=10, fig.height=8}
+spatial_signatures_museums_and_population <- spatial_signatures_museums_table |>
+  select(
+    spatial_signature_type=`Spatial Signature Type`,
+    museums=`Museums (%)`,
+    population=`Population (%)`
+  ) |>
+  mutate(
+    difference=museums-population
+  ) |>
+  filter(spatial_signature_type != "All") |>
+  pivot_longer(
+    cols=c(museums, population, difference),
+    names_to="stat",
+    values_to="value"
+  )
+spatial_signatures_difference_labels <- spatial_signatures_museums_table |>
+  mutate(
+    spatial_signature_type=`Spatial Signature Type`,
+    museums=`Museums (%)`,
+    population=`Population (%)`,
+    difference=museums-population,
+    difference_sign=ifelse(difference > 0, "+", ""),
+    value=museums,
+    label=paste0(museums, "% (", difference_sign, difference, "%)")
+  ) |>
+  filter(spatial_signature_type != "All")
+spatial_signatures_museums_and_population_bars <- ggplot(
+  spatial_signatures_museums_and_population |> filter(stat != "difference"),
+  aes(
+    y=fct_rev(factor(spatial_signature_type, spatial_signature_ordering)),
+    x=value
+  )
+) +
+  geom_bar(aes(fill=stat), stat="identity", position=position_dodge()) +
+  geom_text(
+    data=spatial_signatures_museums_and_population |> filter(stat=="population"),
+    aes(label=paste0(value, "%")),
+    hjust=0,
+    nudge_x=0.1,
+    nudge_y=0.25,
+    size=3
+  ) +
+  geom_text(
+    data=spatial_signatures_difference_labels,
+    aes(label=label),
+    hjust=0,
+    nudge_x=0.1,
+    nudge_y=-0.25,
+    size=3
+  ) +
+  scale_x_continuous(limits=c(0, 25)) +
+  scale_fill_manual(values=c("population"="#5D3A9B", "museums"="#E66100")) +
+  guides(fill=guide_legend(reverse=TRUE)) +
+  labs(
+    title = "Population and Museums across Spatial Signatures (Great Britain)",
+    y = "Spatial Signature",
+    x = "Percentage",
+    fill = ""
+  )  +
+  theme_minimal() +
+  theme(
+    plot.background = element_rect(fill="white", colour="white"),
+    plot.title = element_text(size=16),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    axis.title = element_text(size=14),
+    axis.text = element_text(size=12),
+    legend.title = element_text(size=14),
+    legend.text = element_text(size=12),
+    legend.position = c(0.7, 0.9)
+  )
+
+
+ggsave(
+  file="figures/population_and_museums_by_spatial_signature.png",
+  plot=spatial_signatures_museums_and_population_bars,
+  width=10,
+  height=8
+)
+
+spatial_signatures_museums_and_population_bars
+```
+
 ## Museums by Region
 ```{r, warning=FALSE, echo=FALSE, include=FALSE}
 rural_urban_2_fold_by_region <- small_areas_uk |>
@@ -1254,7 +1338,7 @@ write.xlsx(
     "Northern Ireland"=northern_ireland_museums_table,
     "Spatial Signatures"=spatial_signatures_museums_table
   ),
-  file="data/urban-rural-museums.xlsx"
+  file="stats/museums-urban-rural-stats.xlsx"
 )
 
 write.xlsx(
@@ -1266,7 +1350,7 @@ write.xlsx(
         -rural_urban_class_northern_ireland_3_fold
       )
   ),
-  file="data/all-museums.xlsx"
+  file="stats/museums-with-urban-rural-categories.xlsx"
 )
 ```
 
