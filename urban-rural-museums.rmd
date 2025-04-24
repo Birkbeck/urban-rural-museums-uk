@@ -1109,7 +1109,6 @@ spatial_signatures_museums_and_population_bars <- ggplot(
     legend.position = c(0.7, 0.9)
   )
 
-
 ggsave(
   file="figures/population_and_museums_by_spatial_signature.png",
   plot=spatial_signatures_museums_and_population_bars,
@@ -1323,35 +1322,6 @@ uk_2_fold_houses_by_country_region_table <- rbind(
   rbind(uk_2_fold_houses_all_uk_table) |>
   arrange(`Country/Region`)
 datatable(uk_2_fold_houses_by_country_region_table)
-```
-
-
-```{r save-tables}
-write.xlsx(
-  list(
-    "UK-6-fold"=uk_museums_table,
-    "UK-3-fold"=uk_3_fold_museums_table,
-    "UK-2-fold"=uk_2_fold_museums_table,
-    "UK-2-fold by Region"=uk_2_fold_museums_by_country_region_table,
-    "England and Wales"=england_wales_museums_table,
-    "Scotland"=scotland_museums_table,
-    "Northern Ireland"=northern_ireland_museums_table,
-    "Spatial Signatures"=spatial_signatures_museums_table
-  ),
-  file="stats/museums-urban-rural-stats.xlsx"
-)
-
-write.xlsx(
-  list(
-    "All museums"=museums |>
-      select(
-        -rural_urban_class_england_wales_3_fold,
-        -rural_urban_class_scotland_3_fold,
-        -rural_urban_class_northern_ireland_3_fold
-      )
-  ),
-  file="stats/museums-with-urban-rural-categories.xlsx"
-)
 ```
 
 ```{r, warning=FALSE, echo=FALSE, include=FALSE}
@@ -1591,6 +1561,7 @@ uk_rural_urban_subject_table <- museums |>
     museums_per_100k_people = round(museums_per_100k_people, 2),
     museums_per_100sqkm = round(museums_per_100sqkm, 2)
   )
+datatable(uk_rural_urban_subject_table)
 subject_ordering_table <- uk_rural_urban_subject_table |>
   filter(ruc_composite_3_fold == "Urban") |>
   select(subject_broad, museums_percentage) |>
@@ -1670,7 +1641,7 @@ ggsave(
 uk_rural_urban_subject_bar_chart
 ```
 
-```{r era-tables, warning=FALSE, echo=FALSE, include=FALSE}
+```{r era-tables, warning=FALSE, echo=FALSE}
 uk_rural_urban_era_table <- museums |>
   filter(!is.na(ruc_composite_3_fold)) |>
   group_by(ruc_composite_3_fold, era) |>
@@ -1692,6 +1663,7 @@ uk_rural_urban_era_table <- museums |>
     museums_per_100k_people = round(museums_per_100k_people, 2),
     museums_per_100sqkm = round(museums_per_100sqkm, 2)
   )
+datatable(uk_rural_urban_era_table)
 era_bars_table <- uk_rural_urban_era_table |>
   arrange(
     factor(era, era_ordering), factor(ruc_composite_3_fold, ruc_ordering_uk)
@@ -1719,7 +1691,7 @@ era_bars_table <- uk_rural_urban_era_table |>
   select(ruc_composite_3_fold, era, total_museums, museums_percentage, cumulative_total, label_bar, label_position)
 ```
 
-```{r size-tables, warning=FALSE, echo=FALSE, include=FALSE}
+```{r size-tables, warning=FALSE, echo=FALSE}
 uk_rural_urban_size_table <- museums |>
   filter(!is.na(ruc_composite_3_fold)) |>
   group_by(ruc_composite_3_fold, size) |>
@@ -1741,6 +1713,7 @@ uk_rural_urban_size_table <- museums |>
     museums_per_100k_people = round(museums_per_100k_people, 2),
     museums_per_100sqkm = round(museums_per_100sqkm, 2)
   )
+datatable(uk_rural_urban_size_table)
 size_bars_table <- uk_rural_urban_size_table |>
   arrange(
     factor(size, size_ordering), factor(ruc_composite_3_fold, ruc_ordering_uk)
@@ -1768,7 +1741,7 @@ size_bars_table <- uk_rural_urban_size_table |>
   select(ruc_composite_3_fold, size, total_museums, museums_percentage, cumulative_total, label_bar, label_position)
 ```
 
-```{r governance-tables, warning=FALSE, echo=FALSE, include=FALSE}
+```{r governance-tables, warning=FALSE, echo=FALSE}
 uk_rural_urban_governance_table <- museums |>
   filter(!is.na(ruc_composite_3_fold)) |>
   group_by(ruc_composite_3_fold, governance_specific) |>
@@ -1790,6 +1763,7 @@ uk_rural_urban_governance_table <- museums |>
     museums_per_100k_people = round(museums_per_100k_people, 2),
     museums_per_100sqkm = round(museums_per_100sqkm, 2)
   )
+datatable(uk_rural_urban_governance_table)
 governance_bars_table <- uk_rural_urban_governance_table |>
   arrange(
     factor(governance_specific, governance_ordering), factor(ruc_composite_3_fold, ruc_ordering_uk)
@@ -1840,6 +1814,56 @@ uk_rural_urban_governance_broad_table <- museums |>
     museums_per_100sqkm = round(museums_per_100sqkm, 2)
   )
 datatable(uk_rural_urban_governance_broad_table)
+```
+
+```{r save-tables}
+era_pivot <- uk_rural_urban_era_table |>
+  select(ruc_composite_3_fold, era, total_museums) |>
+  pivot_wider(names_from=ruc_composite_3_fold, values_from=total_museums, values_fill=0)
+size_pivot <- uk_rural_urban_size_table |>
+  select(ruc_composite_3_fold, size, total_museums) |>
+  pivot_wider(names_from=ruc_composite_3_fold, values_from=total_museums, values_fill=0)
+governance_pivot <- uk_rural_urban_governance_table |>
+  select(ruc_composite_3_fold, governance_specific, total_museums) |>
+  pivot_wider(names_from=ruc_composite_3_fold, values_from=total_museums, values_fill=0)
+subject_specific_pivot <- uk_rural_urban_subject_full_table |>
+  select(ruc_composite_3_fold, subject_specific, total_museums) |>
+  pivot_wider(names_from=ruc_composite_3_fold, values_from=total_museums, values_fill=0)
+subject_broad_pivot <- uk_rural_urban_subject_table |>
+  select(ruc_composite_3_fold, subject_broad, total_museums) |>
+  pivot_wider(names_from=ruc_composite_3_fold, values_from=total_museums, values_fill=0)
+
+write.xlsx(
+  list(
+    "UK-6-fold"=uk_museums_table,
+    "UK-3-fold"=uk_3_fold_museums_table,
+    "UK-2-fold"=uk_2_fold_museums_table,
+    "UK-2-fold by Region"=uk_2_fold_museums_by_country_region_table,
+    "England and Wales"=england_wales_museums_table,
+    "Scotland"=scotland_museums_table,
+    "Northern Ireland"=northern_ireland_museums_table,
+    "Spatial Signatures"=spatial_signatures_museums_table,
+    "Museum counts by era"=era_pivot,
+    "Museum counts by size"=size_pivot,
+    "Museum counts by governance"=governance_pivot,
+    "Museum counts by subject"=subject_broad_pivot,
+    "Museum counts by subject narrow"=subject_specific_pivot
+  ),
+  file="stats/museums-urban-rural-stats.xlsx"
+)
+
+write.xlsx(
+  list(
+    "All museums"=museums |>
+      select(
+        -rural_urban_class_england_wales_3_fold,
+        -rural_urban_class_scotland_3_fold,
+        -rural_urban_class_northern_ireland_3_fold
+      )
+  ),
+  file="stats/museums-with-urban-rural-categories.xlsx"
+)
+```
 ```
 
 ```{r uk-wide-rural-urban-era-size-governance-bar, warning=FALSE, echo=FALSE, fig.align="center", fig.width = 10, fig.height = 6}
