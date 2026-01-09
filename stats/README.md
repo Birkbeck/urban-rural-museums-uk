@@ -31,9 +31,3 @@ This file is intended primarily for reference, validation, and inspection of rep
 ## Notes on methodology
 
 Urban–rural categories are based on official classifications produced by UK national statistical agencies and harmonised to enable UK-wide comparison. Details of the classification schemes, harmonisation process, and limitations are documented in the associated paper and main repository README.
-
-## Licensing and reuse
-
-These datasets are provided for research and non-commercial use. Please cite the associated publication and repository if you reuse or adapt the data.
-
-For provenance of the underlying museum records, see the Mapping Museums Lab documentation.
