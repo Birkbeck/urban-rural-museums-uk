@@ -11,7 +11,7 @@ By making the data and methods openly available, this repository enables reprodu
 - [Andrea Ballatore](https://aballatore.space), Senior Lecturer in Cultural Data Science, Cultural Geo-Analytics Lab, Department of Digital Humanities, King's College London (scientific supervision, data interpretation)
 - [George A Wright](https://georgeaw.com), Post-doctoral Researcher, School of Computing and Mathematical Sciences, Birkbeck, University of London (R coding and analysis)
 
-This work was carried out collaboratively between the [**Mapping Museums Lab**](https://mapping-museums.bbk.ac.uk) and [**Cultural Geo-Analytics Lab**](https://aballatore.space/lab).
+This work was carried out collaboratively between the [**Mapping Museums Lab**](https://mapping-museums.bbk.ac.uk) and the [**Cultural Geo-Analytics Lab**](https://aballatore.space/lab).
 
 ## Repository contents
 
