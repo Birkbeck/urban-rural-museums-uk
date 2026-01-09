@@ -15,23 +15,20 @@ This work was carried out collaboratively between the [**Mapping Museums Lab**](
 
 ## Repository contents
 
-- `data/`  
-  Input datasets and documentation describing data sources and preprocessing requirements.
+- `data/`    Input datasets and documentation describing data sources and preprocessing requirements.
 
-- `urban-rural-museums.rmd`  
-  R Markdown file containing the full analytical workflow, from data loading to figures and tables.
+- `urban-rural-museums.rmd`    R Markdown file containing the full analytical workflow, from data loading to figures and tables.
 
-- `urban-rural-museums.html`  
-  Rendered output of the analysis, including results, figures, and tables.
+- `urban-rural-museums.html`    Rendered output of the analysis, including results, figures, and tables.
 
-- `figures/`  
-  Generated figures and tabular outputs produced by the analysis.
+- `stats/`    TODO
+
+- `figures/`    Generated figures and tabular outputs produced by the analysis.
 
 ## Requirements
 
 To run the analysis, you will need:
 
-- R (version 4.0 or later recommended)
 - RStudio
 - The R packages listed at the top of `urban-rural-museums.rmd`
 - External data files described in `data/README.md`
@@ -62,4 +59,4 @@ If you use this repository or its contents in academic work, please cite the ass
 
 ## Contact
 
-andrea [.] ballatore [@] kcl.ac.uk
+https://aballatore.space/contact
