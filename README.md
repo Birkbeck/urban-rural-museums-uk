@@ -21,6 +21,8 @@ This work was carried out collaboratively between the [**Mapping Museums Lab**](
 
 - `urban-rural-museums.html`    Rendered output of the analysis, including results, figures, and tables.
 
+- `maps/`	An interactive map of museums classified as urban and rural.
+
 - `stats/`    Aggregated statistics derived from the museum-level data.
 
 - `figures/`    Generated figures and tabular outputs produced by the analysis.
