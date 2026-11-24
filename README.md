@@ -21,7 +21,8 @@ This work was carried out collaboratively between the [**Mapping Museums Lab**](
 
 - `urban-rural-museums.html`    Rendered output of the analysis, including results, figures, and tables.
 
-- `maps/`	An interactive map of museums classified as urban and rural.
+- `maps/`    An interactive map of all UK museums, coloured by urban–rural class, with filters by subject, governance, size, era of foundation, region, and spatial signature.
+  **[Open the interactive map](https://birkbeck.github.io/urban-rural-museums-uk/maps/urban-rural-museums-map-uk-v1.html)** (or download the HTML file and open it in a web browser).
 
 - `stats/`    Aggregated statistics derived from the museum-level data.
 
